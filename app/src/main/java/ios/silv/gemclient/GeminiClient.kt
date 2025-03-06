@@ -6,7 +6,6 @@ import io.ktor.network.sockets.openReadChannel
 import io.ktor.network.sockets.openWriteChannel
 import io.ktor.network.tls.tls
 import io.ktor.utils.io.readRemaining
-import io.ktor.utils.io.readText
 import io.ktor.utils.io.readUTF8Line
 import io.ktor.utils.io.writeString
 import ios.silv.gemclient.GeminiStatus.Failure
@@ -16,7 +15,9 @@ import ios.silv.gemclient.GeminiStatus.Success
 import ios.silv.gemclient.log.logcat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.io.readByteArray
 import okio.ByteString.Companion.encodeUtf8
+import java.nio.charset.Charset
 import java.security.SecureRandom
 import kotlin.coroutines.CoroutineContext
 
@@ -59,7 +60,11 @@ sealed class GeminiStatus(
 private fun transformStatus(response: String): GeminiStatus {
     // <STATUS><SPACE><META><CR><LF>
     val status = response.slice(0..1)
-    val meta = response.slice(response.indexOf(Char(SPACE)) + 1..<response.lastIndexOf(CR_LF))
+
+    val space = response.indexOf(' ')
+    val meta = response.slice( space + 1..response.lastIndex)
+
+    logcat("GeminiClient") { "received header $response $status $meta" }
 
     return when (val code = status.toInt()) {
         in 10..19 -> Input(code, meta)
@@ -72,18 +77,71 @@ private fun transformStatus(response: String): GeminiStatus {
     }
 }
 
-suspend fun makeGeminiQuery(query: GeminiQuery): Result<String> {
+data class GeminiResponse(
+    val query: GeminiQuery,
+    val meta: String,
+    val content: ByteArray
+)
 
-    val host = query.extractHostFromGeminiUrl()
+sealed interface GeminiContent {
+    data class Text(val content: String, val lang: String, val parent: String = "") : GeminiContent
+}
 
-    if (!host.isSuccess) {
-        return host
+data class TextParams(
+    val charset: Charset,
+    val lang: String,
+)
+
+fun getParams(meta: String): TextParams {
+
+    var charset = Charset.forName("UTF-8")
+    var lang = ""
+
+    if (meta == "text/gemini") {
+        return TextParams(
+            charset,
+            lang
+        )
     }
+
+    val paramList = meta.removePrefix("text/gemini;")
+    val params = paramList.split(';')
+
+    for (param in params) {
+        val (name, value) = param.trim().split('=')
+        when (name) {
+            "lang" -> lang = value
+            "charset" -> charset = Charset.forName(value)
+            else -> Unit
+        }
+    }
+    return TextParams(
+        charset,
+        lang
+    )
+}
+
+fun parseResponse(response: GeminiResponse): GeminiContent {
+    logcat("GeminiClient") { "parsing response meta: ${response.meta} content size: ${response.content.size}" }
+    val meta = response.meta
+    when {
+        meta.startsWith("text/gemini") -> {
+            val (charset, lang) = getParams(meta)
+            return GeminiContent.Text(String(response.content, charset), lang, response.query.url)
+        }
+
+        else -> error("unimplemented")
+    }
+}
+
+suspend fun makeGeminiQuery(query: GeminiQuery): Result<GeminiContent> {
 
     return runCatching {
         if (query.url.encodeUtf8().size > GEMINI_URI_MAX_SIZE) {
             error("${query.url} was larger than max size $GEMINI_URI_MAX_SIZE")
         }
+
+        val host = query.extractHostFromGeminiUrl()
 
         logcat("GeminiClient") { "Making request to ${host.getOrNull()} $GEMINI_PORT" }
 
@@ -105,14 +163,20 @@ suspend fun makeGeminiQuery(query: GeminiQuery): Result<String> {
                         is Failure -> error(status.meta)
                         is Input -> TODO()
                         is Redirect -> TODO()
-                        is Success -> receiveChannel.readRemaining().readText()
+                        is Success -> parseResponse(
+                            GeminiResponse(
+                                query = query,
+                                meta = status.meta,
+                                content = receiveChannel.readRemaining().readByteArray()
+                            )
+                        )
                     }
                 }
         }
     }
 }
 
-fun GeminiQuery.extractHostFromGeminiUrl(): Result<String> = runCatching {
+private fun GeminiQuery.extractHostFromGeminiUrl(): Result<String> = runCatching {
     if (!url.startsWith(prefix = GEMINI_URI_PREFIX)) {
         error("Invalid URL $url Does not start with $GEMINI_URI_PREFIX")
     }

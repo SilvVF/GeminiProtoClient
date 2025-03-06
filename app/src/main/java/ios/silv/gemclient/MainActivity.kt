@@ -7,6 +7,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,16 +56,34 @@ private object MainScreen : Screen() {
     @Composable
     override fun ScreenComposable(modifier: Modifier) {
 
-        val text by produceState("") {
-            value = makeGeminiQuery(
+        val content by produceState(emptyList()) {
+            val response = makeGeminiQuery(
                 GeminiQuery("gemini://geminiprotocol.net/docs/faq.gmi")
             )
                 .onFailure { logcat { it.asLog() } }
-                .getOrElse { it.message.orEmpty() }
+
+
+            value = response.fold(
+                onFailure = { listOf(ContentNode.Error(it.message.orEmpty())) },
+                onSuccess = { content ->
+                    when(content) {
+                        is GeminiContent.Text -> parseText(content)
+                    }
+                }
+            )
         }
 
-        Box(modifier.fillMaxSize()) {
-            Text(text, Modifier.align(Alignment.Center))
+        LazyColumn(Modifier.fillMaxSize()) {
+            items(content) { node ->
+                when(node) {
+                    is ContentNode.Error -> {
+                        Text(node.message)
+                    }
+                    is ContentNode.Line -> {
+                        Text(node.raw)
+                    }
+                }
+            }
         }
     }
 }
