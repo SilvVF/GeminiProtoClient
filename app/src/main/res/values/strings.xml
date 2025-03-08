@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">GemClient</string>
+    <string name="gemini">gemini</string>
 </resources>

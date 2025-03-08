@@ -91,4 +91,8 @@ dependencies {
     implementation(libs.ktor.network.tls)
 
     implementation(libs.kotlinx.serialization.json)
+
+    implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.work.runtime.ktx)
+
 }

@@ -1,6 +1,8 @@
 package ios.silv.gemclient
 
+import android.os.Parcelable
 import ios.silv.gemclient.ContentNode.*
+import kotlinx.parcelize.Parcelize
 
 
 /*
@@ -47,55 +49,66 @@ fun resolveUrl(url: String, parent: String): String = when {
     }
 }
 
-fun parseText(text: GeminiContent.Text): List<Line> {
-    return text.content.lines().map { line ->
-        when {
-            line.startsWith(LINK_PREFIX) -> {
-                // =>[<whitespace>]<URL>[<whitespace><USER-FRIENDLY LINK NAME>]
-                val urlText = line.drop(LINK_PREFIX.length)
-                        .dropWhile { c -> c.isWhitespace() }
-                        .takeWhile { c -> !c.isWhitespace() }
+private fun parseLine(text: GeminiContent.Text, line: String): Line {
+    return when {
+        line.startsWith(LINK_PREFIX) -> {
+            // =>[<whitespace>]<URL>[<whitespace><USER-FRIENDLY LINK NAME>]
+            val urlText = line.drop(LINK_PREFIX.length)
+                .dropWhile { c -> c.isWhitespace() }
+                .takeWhile { c -> !c.isWhitespace() }
 
-                Line.Link(
+            Line.Link(
+                text = line,
+                url = resolveUrl(urlText, text.parent),
+                name = line.takeLastWhile { c -> !c.isWhitespace() }
+            )
+        }
+        line.startsWith(HEADING_PREFIX) -> {
+            // #...[<whitespace>]<heading>
+            val level = line.takeWhile { c -> c == HEADING_PREFIX }.length
+
+            if (level == line.length) {
+                Line.Heading(
                     text = line,
-                    url = resolveUrl(urlText, text.parent),
-                    name = line.takeLastWhile { c -> !c.isWhitespace() }
+                    level = level,
+                    heading = ""
                 )
             }
-            line.startsWith(HEADING_PREFIX) -> {
-                // #...[<whitespace>]<heading>
-                val level = line.takeWhile { c -> c == HEADING_PREFIX }.length
 
-                if (level == line.length) {
-                    Line.Heading(
-                        text = line,
-                        level = level,
-                        heading = ""
-                    )
-                }
+            if (!line[level].isWhitespace()) {
+                Line.Text(line)
+            } else {
+                val heading = line
+                    .slice(level..line.lastIndex)
+                    .trimStart()
 
-                if (!line[level].isWhitespace()) {
-                    Line.Text(line)
-                } else {
-                    val heading = line
-                        .slice(level..line.lastIndex)
-                        .trimStart()
-
-                    Line.Heading(
-                        text = line,
-                        level = level,
-                        heading = heading
-                    )
-                }
+                Line.Heading(
+                    text = line,
+                    level = level,
+                    heading = heading
+                )
             }
-            line.startsWith(LIST_PREFIX) -> {
-                Line.List(line, line.removePrefix(LIST_PREFIX))
-            }
-            line.startsWith(QUOTE_PREFIX) -> {
-                Line.Quote(line, line.removePrefix(QUOTE_PREFIX))
-            }
-            line.startsWith(PREFORMAT_PREFIX) -> Line.Preformat(line, line.removePrefix(PREFORMAT_PREFIX))
-            else -> Line.Text(line)
         }
+        line.startsWith(LIST_PREFIX) -> {
+            Line.List(line, line.removePrefix(LIST_PREFIX))
+        }
+        line.startsWith(QUOTE_PREFIX) -> {
+            Line.Quote(line, line.removePrefix(QUOTE_PREFIX))
+        }
+        line.startsWith(PREFORMAT_PREFIX) -> Line.Preformat(line, line.removePrefix(PREFORMAT_PREFIX))
+        else -> Line.Text(line)
+    }
+}
+
+fun parseTextWithProgress(text: GeminiContent.Text, progress: (parsed: Int, total: Int) -> Unit): List<Line> {
+    val lines = text.content.lines()
+    return lines.mapIndexed { index, s ->
+        parseLine(text, s).also { progress(index + 1, lines.size) }
+    }
+}
+
+fun parseText(text: GeminiContent.Text): List<Line> {
+    return text.content.lines().map {
+        parseLine(text, it)
     }
 }
