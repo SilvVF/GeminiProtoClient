@@ -21,6 +21,7 @@ class App : Application() {
 
         globalServices = GlobalServices.builder()
             .add(cache)
+            .add(GeminiClient(cache))
             .add(workManager)
             .build()
     }

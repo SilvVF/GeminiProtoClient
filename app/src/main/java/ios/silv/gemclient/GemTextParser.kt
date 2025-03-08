@@ -35,7 +35,7 @@ private const val LIST_PREFIX = "* "
 private const val QUOTE_PREFIX = ">"
 private const val PREFORMAT_PREFIX = "```"
 
-fun resolveUrl(url: String, parent: String): String = when {
+private fun resolveUrl(url: String, parent: String): String = when {
     parent.isBlank() -> url
     url.contains("://") -> url
     else -> {
@@ -45,6 +45,15 @@ fun resolveUrl(url: String, parent: String): String = when {
             "$parent$rel"
         } else {
             "$parent/$rel"
+        }
+    }
+}
+
+object GemTextParser {
+
+    fun parse(content: GeminiContent): List<ContentNode> {
+        return when (content) {
+            is GeminiContent.Text -> parseText(content)
         }
     }
 }
@@ -100,14 +109,14 @@ private fun parseLine(text: GeminiContent.Text, line: String): Line {
     }
 }
 
-fun parseTextWithProgress(text: GeminiContent.Text, progress: (parsed: Int, total: Int) -> Unit): List<Line> {
+private fun parseTextWithProgress(text: GeminiContent.Text, progress: (parsed: Int, total: Int) -> Unit): List<Line> {
     val lines = text.content.lines()
     return lines.mapIndexed { index, s ->
         parseLine(text, s).also { progress(index + 1, lines.size) }
     }
 }
 
-fun parseText(text: GeminiContent.Text): List<Line> {
+private fun parseText(text: GeminiContent.Text): List<Line> {
     return text.content.lines().map {
         parseLine(text, it)
     }

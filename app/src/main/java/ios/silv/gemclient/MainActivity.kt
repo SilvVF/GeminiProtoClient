@@ -21,6 +21,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
@@ -43,8 +44,10 @@ import com.zhuinden.simplestack.ScopedServices
 import com.zhuinden.simplestack.ServiceBinder
 import com.zhuinden.simplestack.navigator.Navigator
 import com.zhuinden.simplestackcomposeintegration.core.BackstackProvider
+import com.zhuinden.simplestackcomposeintegration.core.ComposeNavigator
 import com.zhuinden.simplestackcomposeintegration.core.ComposeStateChanger
 import com.zhuinden.simplestackcomposeintegration.core.DefaultComposeKey
+import com.zhuinden.simplestackcomposeintegration.core.LocalBackstack
 import com.zhuinden.simplestackcomposeintegration.core.util.historyAsState
 import com.zhuinden.simplestackcomposeintegration.services.rememberService
 import com.zhuinden.simplestackextensions.lifecyclektx.observeAheadOfTimeWillHandleBackChanged
@@ -55,6 +58,7 @@ import com.zhuinden.statebundle.StateBundle
 import ios.silv.gemclient.ui.theme.GemClientTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -68,7 +72,7 @@ import java.util.Stack
 
 class MainActivity : ComponentActivity() {
 
-    val composeStateChanger = ComposeStateChanger()
+    private val composeStateChanger = ComposeStateChanger()
     lateinit var backstack: Backstack
 
     private val backPressedCallback = object : OnBackPressedCallback(false) {
@@ -143,82 +147,34 @@ class MainActivity : ComponentActivity() {
 }
 
 sealed interface TabState {
-    data class Loading(val progress: Int) : TabState
+    data object Loading : TabState
     data class Done(val nodes: List<ContentNode>) : TabState
 }
 
 
 class GeminiTabLoader(
-    val link: String,
-    backstack: Backstack,
-) : ScopedServices.Activated, Bundleable {
+    private val link: String,
+    private val client: GeminiClient
+) : ScopedServices.Activated {
 
-    private val workManager = backstack.lookup<WorkManager>()
-
-    private val current = MutableStateFlow(link)
-
-    private val scope = CoroutineScope(Dispatchers.Main.immediate)
-    private val state = MutableStateFlow<TabState>(TabState.Loading(-1))
-
-    override fun fromBundle(bundle: StateBundle?) {
-        bundle?.getString("link")?.let { l ->
-            current.value = l
-        }
-    }
-
-    override fun toBundle(): StateBundle {
-        return StateBundle().apply {
-            putString("link", link)
-        }
-    }
+    private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
+    private val state = MutableStateFlow<TabState>(TabState.Loading)
 
     val tabState = state.stateIn(
         scope,
         SharingStarted.WhileSubscribed(5_000),
-        TabState.Loading(-1)
+        TabState.Loading
     )
 
     private fun refresh() {
         scope.launch {
-            val (name, _) = GeminiFetchWorker.enqueue(
-                workManager,
-                GeminiQuery(current.value)
-            )
-
-            workManager.getWorkInfosForUniqueWorkFlow(name).collect { infos ->
-                infos.map {
-                    when (it.state) {
-                        WorkInfo.State.ENQUEUED,
-                        WorkInfo.State.RUNNING -> state.emit(
-                            TabState.Loading(
-                                GeminiFetchWorker.getProgress(it).toInt()
-                            )
-                        )
-
-                        WorkInfo.State.SUCCEEDED -> {
-                            state.emit(
-                                TabState.Done(GeminiFetchWorker.getNodes(it))
-                            )
-                            workManager.enqueue(
-                                GeminiCacheWorker.request(it)
-                            )
-                            cancel()
-                        }
-
-                        WorkInfo.State.FAILED,
-                        WorkInfo.State.BLOCKED,
-                        WorkInfo.State.CANCELLED -> {
-                            state.emit(TabState.Done(emptyList()))
-                            cancel()
-                        }
-                    }
-                }
+            state.emit(TabState.Loading)
+            client.makeGeminiQuery(GeminiQuery(link)).onSuccess {
+                state.emit(TabState.Done(GemTextParser.parse(it)))
+            }.onFailure {
+                state.emit(TabState.Done(listOf(ContentNode.Error(it.message.orEmpty()))))
             }
         }
-    }
-
-    fun goBack() {
-
     }
 
     override fun onServiceActive() {
@@ -234,13 +190,35 @@ class GeminiTabLoader(
 @Parcelize
 data class GeminiTab(
     val link: String
+): Screen() {
+
+    @Composable
+    override fun ScreenComposable(modifier: Modifier) {
+
+        val backstack = LocalBackstack.current
+
+        ComposeNavigator {
+            createBackstack(
+                initialKeys = History.of(GeminiPage(link)),
+                parentServices = backstack,
+                scopedServices = ServiceProvider(),
+                globalServices = App.globalServices
+            )
+        }
+    }
+}
+
+@Immutable
+@Parcelize
+data class GeminiPage(
+    val link: String
 ) : Screen() {
 
     override fun bindServices(serviceBinder: ServiceBinder) {
         super.bindServices(serviceBinder)
 
         with(serviceBinder) {
-            add(GeminiTabLoader(link, backstack))
+            add(GeminiTabLoader(link, lookup()))
         }
     }
 
@@ -248,13 +226,12 @@ data class GeminiTab(
     override fun ScreenComposable(modifier: Modifier) {
         val tabLoader = rememberService<GeminiTabLoader>()
 
+        val backstack = LocalBackstack.current
         val tabState by tabLoader.tabState.collectAsStateWithLifecycle()
         when (val state = tabState) {
             is TabState.Loading -> {
                 Box(Modifier.fillMaxSize()) {
-                    CircularProgressIndicator(progress = {
-                        (state.progress / 100f).coerceIn(0f..1f)
-                    })
+                    CircularProgressIndicator()
                 }
             }
 
@@ -265,7 +242,13 @@ data class GeminiTab(
                             is ContentNode.Error -> {
                                 Text(node.message)
                             }
-
+                            is ContentNode.Line.Link -> {
+                                TextButton(
+                                    onClick = { backstack.goTo(GeminiPage(node.url)) }
+                                ) {
+                                    Text(node.name)
+                                }
+                            }
                             is ContentNode.Line -> {
                                 Text(node.raw)
                             }

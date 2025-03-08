@@ -41,15 +41,6 @@ android {
         }
     }
 
-    val properties = Properties().also { p ->
-        p.load(project.rootProject.file("local.properties").inputStream())
-    }
-
-    buildTypes.onEach { buildType ->
-        buildType.buildConfigField("String", "KEYSTORE_PASSWORD", properties.getProperty("keystore_password"))
-        buildType.buildConfigField("String", "KEY_PASSWORD", properties.getProperty("key_password"))
-    }
-
     buildFeatures {
         compose = true
         viewBinding = true
