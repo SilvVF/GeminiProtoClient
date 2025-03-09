@@ -173,7 +173,7 @@ class GeminiClient(
                     Response(
                         status = header.status,
                         meta = header.meta,
-                        body = ,
+                        body = body,
                         cert = null
                     )
                 }
