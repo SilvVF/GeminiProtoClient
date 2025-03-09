@@ -1,7 +1,6 @@
-package ios.silv.gemclient
+package ios.silv.gemini
 
 import android.os.Build
-import android.os.Parcelable
 import io.ktor.network.selector.SelectorManager
 import io.ktor.network.sockets.aSocket
 import io.ktor.network.sockets.openReadChannel
@@ -10,16 +9,15 @@ import io.ktor.network.tls.tls
 import io.ktor.utils.io.readRemaining
 import io.ktor.utils.io.streams.inputStream
 import io.ktor.utils.io.writeString
-import ios.silv.gemclient.GeminiStatus.Failure
-import ios.silv.gemclient.GeminiStatus.Input
-import ios.silv.gemclient.GeminiStatus.Redirect
-import ios.silv.gemclient.GeminiStatus.Success
-import ios.silv.gemclient.log.LogPriority
-import ios.silv.gemclient.log.logcat
+import ios.silv.core_android.log.LogPriority
+import ios.silv.core_android.log.logcat
+import ios.silv.gemini.GeminiStatus.Failure
+import ios.silv.gemini.GeminiStatus.Input
+import ios.silv.gemini.GeminiStatus.Redirect
+import ios.silv.gemini.GeminiStatus.Success
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.io.Source
-import kotlinx.parcelize.Parcelize
 import okio.BufferedSource
 import okio.ByteString.Companion.encodeUtf8
 import okio.buffer
@@ -29,11 +27,11 @@ import java.nio.charset.Charset
 import java.security.SecureRandom
 import kotlin.coroutines.CoroutineContext
 
-@Parcelize
+
 @JvmInline
 value class GeminiQuery(
     val url: String
-): Parcelable
+)
 
 private const val GEMINI_PORT = 1965
 private const val GEMINI_URI_PREFIX = "gemini://"
@@ -162,7 +160,11 @@ private fun parseResponse(response: GeminiResponse): GeminiContent {
         meta.startsWith("text/gemini") -> {
             val (charset, lang) = getParams(meta)
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                GeminiContent.Text(String(response.content.readAllBytes(), charset), lang, response.query.url)
+                GeminiContent.Text(
+                    String(response.content.readAllBytes(), charset),
+                    lang,
+                    response.query.url
+                )
             } else {
                 TODO("VERSION.SDK_INT < TIRAMISU")
             }
@@ -180,7 +182,7 @@ private suspend fun getResponseFromSocket(query: GeminiQuery): Source = withCont
 
     val host = query.extractHostFromGeminiUrl()
 
-    logcat("GeminiClient") { "Making request to ${host.getOrNull()} $GEMINI_PORT" }
+    logcat { "Making request to ${host.getOrNull()} $GEMINI_PORT" }
 
     aSocket(SelectorManager(GeminiDispatcher))
         .tcp()

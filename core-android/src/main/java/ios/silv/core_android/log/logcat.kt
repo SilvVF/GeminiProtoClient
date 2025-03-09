@@ -1,4 +1,4 @@
-package ios.silv.gemclient.log
+package ios.silv.core_android.log
 
 
 import android.annotation.SuppressLint
@@ -8,7 +8,7 @@ import android.app.Application
 import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.util.Log
-import ios.silv.gemclient.log.LogcatLogger.NoLog.asLog
+import ios.silv.core_android.log.LogcatLogger.NoLog.asLog
 import kotlin.math.min
 
 private const val MAX_LOG_LENGTH = 4000

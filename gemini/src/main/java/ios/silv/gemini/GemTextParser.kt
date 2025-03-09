@@ -1,8 +1,6 @@
-package ios.silv.gemclient
+package ios.silv.gemini
 
-import android.os.Parcelable
-import ios.silv.gemclient.ContentNode.*
-import kotlinx.parcelize.Parcelize
+import ios.silv.gemini.ContentNode.*
 
 
 /*

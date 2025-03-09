@@ -69,19 +69,13 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(libs.androidx.activity.compose)
 
+    api(project(":core-android"))
+    api(project(":gemini"))
+
     implementation(libs.bundles.compose.ui)
     implementation(libs.bundles.compose.runtime)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.core.splashscreen)
 
-    implementation(libs.bundles.camerax)
-    implementation(libs.ktor.client.core)
-    implementation(libs.ktor.client.okhttp)
-    implementation(libs.ktor.network.tls)
-
     implementation(libs.kotlinx.serialization.json)
-
-    implementation(libs.androidx.work.runtime)
-    implementation(libs.androidx.work.runtime.ktx)
-
 }

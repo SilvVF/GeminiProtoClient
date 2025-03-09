@@ -21,6 +21,8 @@ compose = "1.7.8"
 
 composeNav = "2.8.8"
 workmanager = "2.10.0"
+material = "1.10.0"
+jetbrainsKotlinJvm = "2.0.20"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -60,12 +62,15 @@ androidx-camera-video= { module ="androidx.camera:camera-video", version.ref = "
 androidx-camera-view= { module = "androidx.camera:camera-view", version.ref = "camerax" }
 
 kotlinx-serialization-json = {module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson"}
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 
 [plugins]
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+jetbrains-kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "jetbrainsKotlinJvm" }
 
 [bundles]
 compose-ui = ["compose-ui", "compose-ui-tooling", "compose-ui-util", "compose-ui-text", "compose-ui-unit", "compose-ui-geometry", "compose-navigation"]

@@ -1,10 +1,13 @@
 package ios.silv.gemclient
 
 import android.app.Application
-import androidx.fragment.app.FragmentActivity
-import androidx.work.WorkManager
-import ios.silv.gemclient.log.AndroidLogcatLogger
-import ios.silv.gemclient.log.LogPriority
+import ios.silv.gemclient.dependency.AndroidDependencies
+import ios.silv.gemclient.dependency.CommonDependencies
+import ios.silv.gemclient.dependency.DependencyAccessor
+import ios.silv.gemclient.dependency.androidDeps
+import ios.silv.gemclient.dependency.commonDeps
+import ios.silv.core_android.log.AndroidLogcatLogger
+import ios.silv.core_android.log.LogPriority
 
 
 class App : Application() {

@@ -1,4 +1,4 @@
-package ios.silv.gemclient
+package ios.silv.gemini
 
 import java.security.cert.X509Certificate
 import javax.net.ssl.X509TrustManager
