@@ -26,9 +26,6 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import ios.silv.gemclient.GeminiTab
-import ios.silv.gemclient.GeminiTabLoader
-import ios.silv.gemclient.GeminiTabLoaderAction
-import ios.silv.gemclient.TabState
 import ios.silv.gemclient.base.rememberViewModel
 import ios.silv.gemclient.dependency.ActionDispatcher
 import ios.silv.gemini.ContentNode
@@ -38,8 +35,8 @@ fun NavGraphBuilder.geminiPageDestination() {
 
         val args = backStack.toRoute<GeminiTab>()
 
-        val viewModel: GeminiTabLoader = rememberViewModel {
-            GeminiTabLoader(geminiTab = args)
+        val viewModel: GeminiTabViewModel = rememberViewModel {
+            GeminiTabViewModel(geminiTab = args)
         }
 
         val state by viewModel.tabState.collectAsStateWithLifecycle()
@@ -57,8 +54,8 @@ fun NavGraphBuilder.geminiPageDestination() {
 private fun PreviewDoneGeminiPageContent() {
 
     val dispatcher = remember {
-        object : ActionDispatcher<GeminiTabLoaderAction> {
-            override fun dispatch(action: GeminiTabLoaderAction.() -> Unit) {}
+        object : ActionDispatcher<GeminiTabViewModelAction> {
+            override fun dispatch(action: GeminiTabViewModelAction.() -> Unit) {}
         }
     }
 
@@ -83,8 +80,8 @@ private fun PreviewDoneGeminiPageContent() {
 private fun PreviewLoadingGeminiPageContent() {
 
     val dispatcher = remember {
-        object : ActionDispatcher<GeminiTabLoaderAction> {
-            override fun dispatch(action: GeminiTabLoaderAction.() -> Unit) {}
+        object : ActionDispatcher<GeminiTabViewModelAction> {
+            override fun dispatch(action: GeminiTabViewModelAction.() -> Unit) {}
         }
     }
 
@@ -96,7 +93,7 @@ private fun PreviewLoadingGeminiPageContent() {
 
 @Composable
 private fun GeminiPageContent(
-    dispatcher: ActionDispatcher<GeminiTabLoaderAction>,
+    dispatcher: ActionDispatcher<GeminiTabViewModelAction>,
     state: TabState,
 ) {
     Scaffold(

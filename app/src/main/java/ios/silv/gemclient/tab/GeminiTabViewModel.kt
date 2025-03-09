@@ -1,4 +1,4 @@
-package ios.silv.gemclient
+package ios.silv.gemclient.tab
 
 import androidx.lifecycle.viewModelScope
 import ios.silv.core_android.StateFlowStack
@@ -7,11 +7,15 @@ import ios.silv.gemclient.dependency.DependencyAccessor
 import ios.silv.gemclient.dependency.ViewModelActionHandler
 import ios.silv.gemclient.dependency.commonDeps
 import ios.silv.core_android.log.logcat
+import ios.silv.gemclient.GeminiTab
+import ios.silv.gemini.ContentNode
+import ios.silv.gemini.GeminiParser
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.transformLatest
 
-interface GeminiTabLoaderAction {
+interface GeminiTabViewModelAction {
     fun loadPage(link: String)
     fun goBack()
     fun refresh()
@@ -19,19 +23,15 @@ interface GeminiTabLoaderAction {
 
 sealed class TabState(val route: String) {
     data class Loading(val url: String) : TabState(url)
-    data class Done(val url: String, val nodes: List<ios.silv.gemini.ContentNode>) : TabState(url)
+    data class Done(val url: String, val nodes: List<ContentNode>) : TabState(url)
 }
 
-class GeminiTabLoader @OptIn(DependencyAccessor::class) constructor(
+class GeminiTabViewModel @OptIn(DependencyAccessor::class) constructor(
     geminiTab: GeminiTab,
     private val client: ios.silv.gemini.GeminiClient = commonDeps.geminiClient,
-): GeminiTabLoaderAction, ViewModelActionHandler<GeminiTabLoaderAction>()  {
+) : GeminiTabViewModelAction, ViewModelActionHandler<GeminiTabViewModelAction>() {
 
-    override val handler: GeminiTabLoaderAction = this
-
-    init {
-        logcat { geminiTab.baseUrl }
-    }
+    override val handler: GeminiTabViewModelAction = this
 
     private val stack = StateFlowStack(geminiTab.baseUrl, minSize = 1)
 
@@ -41,12 +41,12 @@ class GeminiTabLoader @OptIn(DependencyAccessor::class) constructor(
 
         emit(TabState.Loading(current))
 
-        client.makeGeminiQuery(ios.silv.gemini.GeminiQuery(current)).onSuccess {
+        client.makeGeminiQuery(current).onSuccess {
             logcat { it.toString() }
-            emit(TabState.Done(current, ios.silv.gemini.GemTextParser.parse(it)))
+            emit(TabState.Done(current, GeminiParser.parse(current, it).toList()))
         }.onFailure {
             logcat { it.stackTraceToString() }
-            emit(TabState.Done(current, listOf(ios.silv.gemini.ContentNode.Error(it.message.orEmpty()))))
+            emit(TabState.Done(current, listOf(ContentNode.Error(it.message.orEmpty()))))
         }
     }
         .restartableStateIn(

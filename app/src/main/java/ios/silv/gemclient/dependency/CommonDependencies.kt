@@ -24,9 +24,9 @@ public abstract class CommonDependencies {
 
     abstract val application: Application
 
-    val geminiCache by lazy { ios.silv.gemini.GeminiCache(application) }
+    val geminiCache by lazy { GeminiCache(application) }
 
-    val geminiClient by lazy { ios.silv.gemini.GeminiClient(geminiCache) }
+    val geminiClient by lazy { GeminiClient(geminiCache) }
 
     val navigator = ComposeNavigator()
 }

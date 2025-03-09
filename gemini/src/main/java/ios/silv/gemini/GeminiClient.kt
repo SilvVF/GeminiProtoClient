@@ -1,246 +1,186 @@
 package ios.silv.gemini
 
-import android.os.Build
+import android.annotation.SuppressLint
+import io.ktor.http.URLBuilder
+import io.ktor.http.Url
+import io.ktor.http.fullPath
+import io.ktor.http.protocolWithAuthority
+import io.ktor.http.set
 import io.ktor.network.selector.SelectorManager
 import io.ktor.network.sockets.aSocket
 import io.ktor.network.sockets.openReadChannel
 import io.ktor.network.sockets.openWriteChannel
+import io.ktor.network.tls.addKeyStore
 import io.ktor.network.tls.tls
+import io.ktor.util.cio.use
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.ByteWriteChannel
+import io.ktor.utils.io.InternalAPI
+import io.ktor.utils.io.copyAndClose
+import io.ktor.utils.io.core.copy
 import io.ktor.utils.io.readRemaining
-import io.ktor.utils.io.streams.inputStream
 import io.ktor.utils.io.writeString
-import ios.silv.core_android.log.LogPriority
 import ios.silv.core_android.log.logcat
-import ios.silv.gemini.GeminiStatus.Failure
-import ios.silv.gemini.GeminiStatus.Input
-import ios.silv.gemini.GeminiStatus.Redirect
-import ios.silv.gemini.GeminiStatus.Success
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.io.Source
-import okio.BufferedSource
-import okio.ByteString.Companion.encodeUtf8
-import okio.buffer
-import okio.source
-import java.io.InputStream
-import java.nio.charset.Charset
 import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import kotlin.coroutines.CoroutineContext
+import kotlin.math.log
 
 
-@JvmInline
-value class GeminiQuery(
-    val url: String
+internal const val URLMaxLength = 1024
+internal const val MetaMaxLength = 1024
+
+
+// Gemini status codes as defined in the Gemini spec Appendix 1.
+object GeminiCode {
+    const val StatusInput = 10
+    const val StatusSensitiveInput = 11
+
+    const val StatusSuccess = 20
+
+    const val StatusRedirect = 30
+    const val StatusRedirectTemporary = 30
+    const val StatusRedirectPermanent = 31
+
+    const val StatusTemporaryFailure = 40
+    const val StatusUnavailable = 41
+    const val StatusCGIError = 42
+    const val StatusProxyError = 43
+    const val StatusSlowDown = 44
+
+    const val StatusPermanentFailure = 50
+    const val StatusNotFound = 51
+    const val StatusGone = 52
+    const val StatusProxyRequestRefused = 53
+    const val StatusBadRequest = 59
+
+    const val StatusClientCertificateRequired = 60
+    const val StatusCertificateNotAuthorised = 61
+    const val StatusCertificateNotValid = 62
+
+    fun statusText(code: Int): String? = statusText[code]
+
+    private val statusText = mapOf(
+        StatusInput to "Input",
+        StatusSensitiveInput to "Sensitive Input",
+
+        StatusSuccess to "Success",
+
+        // StatusRedirect to        "Redirect - Temporary"
+        StatusRedirectTemporary to "Redirect - Temporary",
+        StatusRedirectPermanent to "Redirect - Permanent",
+
+        StatusTemporaryFailure to "Temporary Failure",
+        StatusUnavailable to "Server Unavailable",
+        StatusCGIError to "CGI Error",
+        StatusProxyError to "Proxy Error",
+        StatusSlowDown to "Slow Down",
+
+        StatusPermanentFailure to "Permanent Failure",
+        StatusNotFound to "Not Found",
+        StatusGone to "Gone",
+        StatusProxyRequestRefused to "Proxy Request Refused",
+        StatusBadRequest to "Bad Request",
+
+        StatusClientCertificateRequired to "Client Certificate Required",
+        StatusCertificateNotAuthorised to "Certificate Not Authorised",
+        StatusCertificateNotValid to "Certificate Not Valid",
+    )
+}
+
+data class Response(
+    val status: Int,
+    val meta: String,
+    val body: Source,
+    val cert: X509Certificate? = null
 )
 
-private const val GEMINI_PORT = 1965
-private const val GEMINI_URI_PREFIX = "gemini://"
-private const val GEMINI_URI_MAX_SIZE = 1024
-private const val GEMTEXT_LINK_PREFIX = "=>"
-const val CR = '\r'.code.toByte()
-const val LF = '\n'.code.toByte()
-private const val SPACE = 0x20
+data class Header(
+    val status: Int,
+    val meta: String
+)
 
-private val GeminiDispatcher: CoroutineContext = Dispatchers.IO.limitedParallelism(2)
 
 class GeminiClient(
     private val cache: GeminiCache
 ) {
 
-    suspend fun makeGeminiQuery(query: GeminiQuery): Result<GeminiContent> {
+    private val geminiDispatcher: CoroutineContext = Dispatchers.IO.limitedParallelism(2)
+
+    suspend fun makeGeminiQuery(query: String): Result<Response> {
+        return withContext(geminiDispatcher) { fetch(query) }
+    }
+
+    private suspend fun fetch(rawUrl: String): Result<Response> {
+        return runCatching {
+            fetchWithHostAndCert(Url(rawUrl), byteArrayOf(), byteArrayOf()).getOrThrow()
+        }
+    }
+
+    @OptIn(InternalAPI::class)
+    private suspend fun fetchWithHostAndCert(
+        url: Url, certPEM: ByteArray, keyPEM: ByteArray
+    ): Result<Response> {
         return runCatching {
 
-            withContext(GeminiDispatcher) {
+            val urlBuilder = URLBuilder(url)
+            val urlLength = url.toString().length
 
-                val cached = cache.getResponse(url = query.url)
+            if (urlLength > URLMaxLength) {
+                error("url is too long $urlLength > $URLMaxLength")
+            }
 
-                logcat { "found from cache $query ${cached?.path}" }
+            if (url.protocol.name != "gemini") {
+                error("unsupported protocol ${url.protocol.name}")
+            }
 
-                val buffer = okio.Buffer()
-                val source: BufferedSource = cached?.inputStream()?.source()?.buffer()
-                    ?: getResponseFromSocket(query).inputStream().source().buffer()
-
-                source.use { s ->
-                    s.read(buffer, Long.MAX_VALUE)
-                }
-
-                val cloned = buffer.clone().inputStream().source().buffer()
-
-                val header = cloned.readUtf8Line()!!
-                when (val status = transformStatus(header)) {
-                    is Failure -> {
-                        logcat { "received failure response" }
-                        error(status.meta)
-                    }
-                    is Input -> TODO()
-                    is Redirect -> TODO() // makeGeminiQuery(GeminiQuery(status.meta)).getOrThrow()
-                    is Success -> {
-                        try {
-                            if (cached == null) {
-                                cache.cacheResponse(query.url,  buffer.clone().inputStream().source())
-                            }
-                        } catch (e: Exception) {
-                            logcat(LogPriority.ERROR) { "failed to write to cache $query ${e.stackTraceToString()}" }
-                        }
-
-                        parseResponse(
-                            GeminiResponse(
-                                query = query,
-                                meta = status.meta,
-                                content = cloned.inputStream()
-                            )
-                        )
-                    }
-                }.also {
-                    source.close()
+            if (url.port == 0) {
+                urlBuilder.set {
+                    port = 1965
                 }
             }
+
+            val keystore = buildTlsCertificateIfNeeded(certPEM, keyPEM).getOrNull()
+
+            aSocket(SelectorManager(Dispatchers.IO)).tcp().connect(
+                url.host,
+                urlBuilder.build().port,
+            )
+                .tls(Dispatchers.IO) {
+                    random = SecureRandom()
+                    if (keystore != null) {
+                        addKeyStore(keystore, null, "certificate")
+                    } else {
+                        trustManager = SslSettings.getTrustManager()
+                    }
+                }
+                .use { conn ->
+                    conn.openWriteChannel().use {
+                        writeString("${url}\r\n")
+                    }
+
+                    val rc = conn.openReadChannel()
+                    val header = getHeader(rc).getOrThrow()
+
+                    // need to suck the shit up and cpy so
+                    // sock closing doesn't cancel channel when
+                    // the parser is parsing
+                    val body = rc.readRemaining().copy()
+
+                    Response(
+                        status = header.status,
+                        meta = header.meta,
+                        body = ,
+                        cert = null
+                    )
+                }
         }
     }
-
 }
 
-private fun transformStatus(response: String): GeminiStatus {
-    // <STATUS><SPACE><META><CR><LF>
-    val status = response.slice(0..1)
 
-    val space = response.indexOf(' ')
-    val meta = response.slice(space + 1..response.lastIndex)
 
-    logcat("GeminiClient") { "received header $response $status $meta" }
 
-    return when (val code = status.toInt()) {
-        in 10..19 -> Input(code, meta)
-        in 20..29 -> Success(code, meta)
-        in 30..39 -> Redirect(code, meta)
-        in 40..49 -> Failure.TempFailure(code, meta)
-        in 50..59 -> Failure.PermFailure(code, meta)
-        in 60..69 -> Failure.ClientCertReq(code, meta)
-        else -> error("Invalid status code received")
-    }
-}
-
-private data class TextParams(
-    val charset: Charset,
-    val lang: String,
-)
-
-private fun getParams(meta: String): TextParams {
-
-    var charset = Charset.forName("UTF-8")
-    var lang = ""
-
-    if (meta == "text/gemini") {
-        return TextParams(
-            charset,
-            lang
-        )
-    }
-
-    val paramList = meta.removePrefix("text/gemini;")
-    val params = paramList.split(';')
-
-    for (param in params) {
-        val (name, value) = param.trim().split('=')
-        when (name) {
-            "lang" -> lang = value
-            "charset" -> charset = Charset.forName(value)
-            else -> Unit
-        }
-    }
-    return TextParams(
-        charset,
-        lang
-    )
-}
-
-private fun parseResponse(response: GeminiResponse): GeminiContent {
-    val meta = response.meta
-    when {
-        meta.startsWith("text/gemini") -> {
-            val (charset, lang) = getParams(meta)
-            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                GeminiContent.Text(
-                    String(response.content.readAllBytes(), charset),
-                    lang,
-                    response.query.url
-                )
-            } else {
-                TODO("VERSION.SDK_INT < TIRAMISU")
-            }
-        }
-
-        else -> error("unimplemented")
-    }
-}
-
-private suspend fun getResponseFromSocket(query: GeminiQuery): Source = withContext(GeminiDispatcher) {
-
-    if (query.url.encodeUtf8().size > GEMINI_URI_MAX_SIZE) {
-        error("${query.url} was larger than max size $GEMINI_URI_MAX_SIZE")
-    }
-
-    val host = query.extractHostFromGeminiUrl()
-
-    logcat { "Making request to ${host.getOrNull()} $GEMINI_PORT" }
-
-    aSocket(SelectorManager(GeminiDispatcher))
-        .tcp()
-        .connect(hostname = host.getOrThrow(), port = GEMINI_PORT)
-        .tls(Dispatchers.IO) {
-            random = SecureRandom()
-            trustManager = SslSettings.getTrustManager()
-        }
-        .use { sock ->
-            val sendChannel = sock.openWriteChannel(autoFlush = true)
-            val receiveChannel = sock.openReadChannel()
-
-            sendChannel.writeString("${query.url}\r\n")
-
-            receiveChannel.readRemaining()
-        }
-}
-
-private fun GeminiQuery.extractHostFromGeminiUrl(): Result<String> = runCatching {
-    if (!url.startsWith(prefix = GEMINI_URI_PREFIX)) {
-        error("Invalid URL $url Does not start with $GEMINI_URI_PREFIX")
-    }
-
-    val end = url.indexOf('/', startIndex = GEMINI_URI_PREFIX.length)
-        .takeIf { i -> i != -1 }
-        ?: url.length
-
-    url.slice(GEMINI_URI_PREFIX.length..<end)
-}
-
-sealed class GeminiStatus(
-    open val code: Int,
-    open val meta: String
-) {
-    data class Input(override val code: Int, override val meta: String) : GeminiStatus(code, meta)
-    data class Success(override val code: Int, override val meta: String) : GeminiStatus(code, meta)
-    data class Redirect(override val code: Int, override val meta: String) :
-        GeminiStatus(code, meta)
-
-    sealed class Failure(override val code: Int, override val meta: String) :
-        GeminiStatus(code, meta) {
-        data class TempFailure(override val code: Int, override val meta: String) :
-            Failure(code, meta)
-
-        data class PermFailure(override val code: Int, override val meta: String) :
-            Failure(code, meta)
-
-        data class ClientCertReq(override val code: Int, override val meta: String) :
-            Failure(code, meta)
-    }
-}
-
-data class GeminiResponse(
-    val query: GeminiQuery,
-    val meta: String,
-    val content: InputStream
-)
-
-sealed class GeminiContent {
-    data class Text(val content: String, val lang: String, val parent: String = "") : GeminiContent()
-}
