@@ -1,5 +1,5 @@
 [versions]
-agp = "8.8.2"
+agp = "8.9.0"
 kotlin = "2.0.20"
 coreKtx = "1.15.0"
 junit = "4.13.2"
@@ -19,9 +19,7 @@ kotlinxSerializationJson = "1.8.0"
 composeUi = "1.7.8"
 compose = "1.7.8"
 
-simpleStackCompose ="0.13.1"
-simpleStack = "2.9.0"
-simpleStackExt = "2.3.4"
+composeNav = "2.8.8"
 workmanager = "2.10.0"
 
 [libraries]
@@ -40,9 +38,8 @@ androidx-activity-compose = { group = "androidx.activity", name = "activity-comp
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-network-tls = { module = "io.ktor:ktor-network-tls", version.ref = "ktor" }
-simple-stack-compose = { module = "com.github.Zhuinden:simple-stack-compose-integration", version.ref = "simpleStackCompose" }
-simple-stack = { module = "com.github.Zhuinden:simple-stack", version.ref = "simpleStack" }
-simple-stack-ext = { module = "com.github.Zhuinden:simple-stack-extensions", version.ref = "simpleStackExt" }
+
+compose-navigation = { module = "androidx.navigation:navigation-compose", version.ref = "composeNav" }
 
 compose-ui= { module = "androidx.compose.ui:ui", version.ref= "composeUi"}
 compose-ui-util= { module = "androidx.compose.ui:ui-util", version.ref= "composeUi"}
@@ -71,7 +68,6 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 
 [bundles]
-simple-stack = ["simple-stack-compose","simple-stack", "simple-stack-ext"]
-compose-ui = ["compose-ui", "compose-ui-tooling", "compose-ui-util", "compose-ui-text", "compose-ui-unit", "compose-ui-geometry"]
+compose-ui = ["compose-ui", "compose-ui-tooling", "compose-ui-util", "compose-ui-text", "compose-ui-unit", "compose-ui-geometry", "compose-navigation"]
 compose-runtime = ["compose-runtime", "compose-foundation", "compose-foundation-layout", "compose-animation"]
 camerax = ["androidx-camera-core", "androidx-camera2", "androidx-camera-lifecycle", "androidx-camera-video", "androidx-camera-view"]

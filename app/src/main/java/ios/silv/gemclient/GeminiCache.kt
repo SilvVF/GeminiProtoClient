@@ -3,6 +3,7 @@ package ios.silv.gemclient
 import android.content.Context
 import io.ktor.utils.io.core.copy
 import io.ktor.utils.io.core.copyTo
+import ios.silv.gemclient.log.logcat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -11,11 +12,16 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.io.Source
 import kotlinx.io.asSink
 import kotlinx.io.buffered
+import kotlinx.io.writeString
+import okio.BufferedSource
+import okio.buffer
+import okio.sink
 import java.io.File
 import java.security.MessageDigest
 import java.util.PriorityQueue
+import kotlin.math.sin
 
-private const val CACHE_SIZE_BYTES = 100L * 1024 * 1024
+private const val CACHE_SIZE_BYTES = 1024 * 1024 * 150L
 
 class GeminiCache(private val context: Context) {
     private val cacheDir get() = File(context.cacheDir.path, "gemini")
@@ -35,7 +41,7 @@ class GeminiCache(private val context: Context) {
 
             for (file in cacheDir.listFiles().orEmpty()) {
                 if (file.isFile) {
-                    bytes += file.totalSpace
+                    bytes += file.length()
 
                     modified[file.name] = file.lastModified()
                     queue.add(file.name)
@@ -48,6 +54,7 @@ class GeminiCache(private val context: Context) {
     }
 
     private fun cleanupIfNeeded() {
+        logcat { "running cleanup space = $bytes / $CACHE_SIZE_BYTES" }
         val seen = mutableSetOf<String>()
         while (bytes >= CACHE_SIZE_BYTES) {
 
@@ -57,9 +64,11 @@ class GeminiCache(private val context: Context) {
             val file = File(cacheDir, path)
 
             if (file.delete()) {
-                bytes -= file.totalSpace
+                bytes -= file.length()
             } else {
-                modified[path] = System.currentTimeMillis()
+                val mod = System.currentTimeMillis()
+                modified[path] = mod
+                file.setLastModified(mod)
                 queue.add(path)
             }
         }
@@ -75,7 +84,7 @@ class GeminiCache(private val context: Context) {
             val key = hashForKey(url)
 
             val file = File(cacheDir, key)
-            val space = file.totalSpace
+            val space = file.length()
 
             if (file.delete()) {
                 queue.remove(key)
@@ -96,7 +105,7 @@ class GeminiCache(private val context: Context) {
         }
     }
 
-    suspend fun cacheResponse(url: String, source: Source) {
+    suspend fun cacheResponse(url: String, source: okio.Source) {
         mutex.withLock {
             val key = hashForKey(url)
 
@@ -104,8 +113,8 @@ class GeminiCache(private val context: Context) {
                 createNewFile()
             }
 
-            file.outputStream().asSink().buffered().use { sink ->
-                sink.transferFrom(source.copy())
+            file.outputStream().sink().buffer().use { sink ->
+                sink.writeAll(source)
             }
 
             val modifiedAt = System.currentTimeMillis()
@@ -114,7 +123,7 @@ class GeminiCache(private val context: Context) {
             modified[file.name] = modifiedAt
             queue.add(file.name)
 
-            bytes += file.totalSpace
+            bytes += file.length()
 
             cleanupIfNeeded()
         }

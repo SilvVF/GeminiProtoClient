@@ -1,33 +1,28 @@
 package ios.silv.gemclient
 
 import android.app.Application
+import androidx.fragment.app.FragmentActivity
 import androidx.work.WorkManager
-import com.zhuinden.simplestack.GlobalServices
-import com.zhuinden.simplestackextensions.servicesktx.add
 import ios.silv.gemclient.log.AndroidLogcatLogger
 import ios.silv.gemclient.log.LogPriority
 
+
 class App : Application() {
 
+    @OptIn(DependencyAccessor::class)
     override fun onCreate() {
         super.onCreate()
 
         AndroidLogcatLogger.installOnDebuggableApp(this, minPriority = LogPriority.VERBOSE)
 
-        SslSettings.configure(this)
+        commonDeps = object : CommonDependencies() {
 
-        val cache by lazy { GeminiCache(this) }
-        val workManager by lazy {  WorkManager.getInstance(this) }
+            override val application: Application = this@App
+        }
 
-        globalServices = GlobalServices.builder()
-            .add(cache)
-            .add(GeminiClient(cache))
-            .add(workManager)
-            .build()
-    }
+        androidDeps = object : AndroidDependencies() {
 
-    companion object {
-        lateinit var globalServices: GlobalServices
-            private set
+            override val application: Application = this@App
+        }
     }
 }

@@ -1,5 +1,6 @@
 package ios.silv.gemclient
 
+import android.os.Build
 import android.os.Parcelable
 import io.ktor.network.selector.SelectorManager
 import io.ktor.network.sockets.aSocket
@@ -7,21 +8,23 @@ import io.ktor.network.sockets.openReadChannel
 import io.ktor.network.sockets.openWriteChannel
 import io.ktor.network.tls.tls
 import io.ktor.utils.io.readRemaining
+import io.ktor.utils.io.streams.inputStream
 import io.ktor.utils.io.writeString
 import ios.silv.gemclient.GeminiStatus.Failure
 import ios.silv.gemclient.GeminiStatus.Input
 import ios.silv.gemclient.GeminiStatus.Redirect
 import ios.silv.gemclient.GeminiStatus.Success
+import ios.silv.gemclient.log.LogPriority
 import ios.silv.gemclient.log.logcat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.io.Source
-import kotlinx.io.asSource
-import kotlinx.io.buffered
-import kotlinx.io.readByteArray
-import kotlinx.io.readLineStrict
 import kotlinx.parcelize.Parcelize
+import okio.BufferedSource
 import okio.ByteString.Companion.encodeUtf8
+import okio.buffer
+import okio.source
+import java.io.InputStream
 import java.nio.charset.Charset
 import java.security.SecureRandom
 import kotlin.coroutines.CoroutineContext
@@ -36,10 +39,68 @@ private const val GEMINI_PORT = 1965
 private const val GEMINI_URI_PREFIX = "gemini://"
 private const val GEMINI_URI_MAX_SIZE = 1024
 private const val GEMTEXT_LINK_PREFIX = "=>"
-const val CR_LF = '\r'.code.toByte() + '\n'.code.toByte()
+const val CR = '\r'.code.toByte()
+const val LF = '\n'.code.toByte()
 private const val SPACE = 0x20
 
 private val GeminiDispatcher: CoroutineContext = Dispatchers.IO.limitedParallelism(2)
+
+class GeminiClient(
+    private val cache: GeminiCache
+) {
+
+    suspend fun makeGeminiQuery(query: GeminiQuery): Result<GeminiContent> {
+        return runCatching {
+
+            withContext(GeminiDispatcher) {
+
+                val cached = cache.getResponse(url = query.url)
+
+                logcat { "found from cache $query ${cached?.path}" }
+
+                val buffer = okio.Buffer()
+                val source: BufferedSource = cached?.inputStream()?.source()?.buffer()
+                    ?: getResponseFromSocket(query).inputStream().source().buffer()
+
+                source.use { s ->
+                    s.read(buffer, Long.MAX_VALUE)
+                }
+
+                val cloned = buffer.clone().inputStream().source().buffer()
+
+                val header = cloned.readUtf8Line()!!
+                when (val status = transformStatus(header)) {
+                    is Failure -> {
+                        logcat { "received failure response" }
+                        error(status.meta)
+                    }
+                    is Input -> TODO()
+                    is Redirect -> TODO() // makeGeminiQuery(GeminiQuery(status.meta)).getOrThrow()
+                    is Success -> {
+                        try {
+                            if (cached == null) {
+                                cache.cacheResponse(query.url,  buffer.clone().inputStream().source())
+                            }
+                        } catch (e: Exception) {
+                            logcat(LogPriority.ERROR) { "failed to write to cache $query ${e.stackTraceToString()}" }
+                        }
+
+                        parseResponse(
+                            GeminiResponse(
+                                query = query,
+                                meta = status.meta,
+                                content = cloned.inputStream()
+                            )
+                        )
+                    }
+                }.also {
+                    source.close()
+                }
+            }
+        }
+    }
+
+}
 
 private fun transformStatus(response: String): GeminiStatus {
     // <STATUS><SPACE><META><CR><LF>
@@ -96,12 +157,15 @@ private fun getParams(meta: String): TextParams {
 }
 
 private fun parseResponse(response: GeminiResponse): GeminiContent {
-    logcat("GeminiClient") { "parsing response meta: ${response.meta} content size: ${response.content.size}" }
     val meta = response.meta
     when {
         meta.startsWith("text/gemini") -> {
             val (charset, lang) = getParams(meta)
-            return GeminiContent.Text(String(response.content, charset), lang, response.query.url)
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                GeminiContent.Text(String(response.content.readAllBytes(), charset), lang, response.query.url)
+            } else {
+                TODO("VERSION.SDK_INT < TIRAMISU")
+            }
         }
 
         else -> error("unimplemented")
@@ -129,45 +193,10 @@ private suspend fun getResponseFromSocket(query: GeminiQuery): Source = withCont
             val sendChannel = sock.openWriteChannel(autoFlush = true)
             val receiveChannel = sock.openReadChannel()
 
-            sendChannel.writeString("${query}$CR_LF")
+            sendChannel.writeString("${query.url}\r\n")
 
             receiveChannel.readRemaining()
         }
-}
-
-class GeminiClient(
-    private val cache: GeminiCache
-) {
-
-    suspend fun makeGeminiQuery(query: GeminiQuery): Result<GeminiContent> {
-        return runCatching {
-
-            withContext(GeminiDispatcher) {
-
-                val cached = cache.getResponse(url = query.url)
-
-                val source: Source = cached?.inputStream()?.asSource()?.buffered()
-                    ?: getResponseFromSocket(query).also {
-                        cache.cacheResponse(query.url, it)
-                    }
-
-
-                when (val status = transformStatus(source.readLineStrict(1029))) {
-                    is Failure -> error(status.meta)
-                    is Input -> TODO()
-                    is Redirect -> makeGeminiQuery(GeminiQuery(status.meta)).getOrThrow()
-                    is Success -> parseResponse(
-                        GeminiResponse(
-                            query = query,
-                            meta = status.meta,
-                            content = source.readByteArray()
-                        )
-                    )
-                }.also { source.close() }
-            }
-        }
-    }
-
 }
 
 private fun GeminiQuery.extractHostFromGeminiUrl(): Result<String> = runCatching {
@@ -207,7 +236,7 @@ sealed class GeminiStatus(
 data class GeminiResponse(
     val query: GeminiQuery,
     val meta: String,
-    val content: ByteArray
+    val content: InputStream
 )
 
 sealed class GeminiContent {

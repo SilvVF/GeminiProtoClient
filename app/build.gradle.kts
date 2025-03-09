@@ -69,8 +69,6 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(libs.androidx.activity.compose)
 
-    implementation(libs.bundles.simple.stack)
-
     implementation(libs.bundles.compose.ui)
     implementation(libs.bundles.compose.runtime)
     implementation(libs.androidx.material3)
