@@ -56,14 +56,13 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import java.util.UUID
 
 class MainActivity : ComponentActivity() {
 
     @OptIn(DependencyAccessor::class)
     val navigator = commonDeps.navigator
-
-    val viewModel = viewModels<> {  }
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
@@ -77,18 +76,22 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
 
                     LaunchedEffect(navController) {
-                        navigator.bind(navController)
+                        navigator.handleTabNavigationCommands(navController)
                     }
 
-                    NavHost(
-                        navController,
-                        startDestination = GeminiTab(link = "gemini://geminiprotocol.net/docs/faq.gmi")
-                    ) {
-                        composable<GeminiTab> { backStackEntry ->
+                    CompositionLocalProvider(LocalNavigator provides navigator) {
+                        NavHost(
+                            navController,
+                            startDestination = GeminiTab(link = "gemini://geminiprotocol.net/docs/faq.gmi")
+                        ) {
+                            composable<GeminiTab> { backStackEntry ->
 
-                            val route = backStackEntry.toRoute<GeminiTab>()
+                                val route = backStackEntry.toRoute<GeminiTab>())
 
-                            route.TabHost(GeminiPage(route.link))
+                                logcat { "$route ${route.link}" }
+                                
+                                route.TabHost(GeminiPage(route.link))
+                            }
                         }
                     }
                 }
@@ -103,8 +106,8 @@ sealed interface TabState {
 }
 
 class GeminiTabLoader @OptIn(DependencyAccessor::class) constructor(
-    val client: GeminiClient = commonDeps.geminiClient,
-    val savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
+    private val client: GeminiClient = commonDeps.geminiClient,
 ): ViewModel() {
 
     val navArgs = savedStateHandle.toRoute<GeminiPage>()
@@ -208,21 +211,21 @@ interface Screen
 abstract class Tab {
 
     @Composable
-    fun TabHost(start: Screen) {
-
-        val navigator = LocalNavigator.current
+    fun <T: Any> TabHost(start: T) {
         val navController = rememberNavController()
 
         LaunchedEffect(Unit) {
-
+            @OptIn(DependencyAccessor::class)
+            commonDeps.navigator.handleNavigationCommands(navController)
         }
 
         NavHost(
             navController,
-            startDestination = start
-        ) {
-            this.graph()
-        }
+            startDestination = start,
+            builder = {
+                graph()
+            }
+        )
     }
 
     abstract fun NavGraphBuilder.graph()
@@ -236,17 +239,17 @@ data class GeminiTab(
     override fun NavGraphBuilder.graph() {
         composable<GeminiPage> { backStackEntry ->
 
-            val nestedRoute = backStackEntry.toRoute<GeminiPage>()
+            logcat { backStackEntry.savedStateHandle.toRoute<GeminiPage>().toString() }
 
-            GeminiPageContent(
-                remember { GeminiTabLoader(nestedRoute.link) }
-            )
+            val viewModel = ios.silv.gemclient.stateViewModel {
+                GeminiTabLoader(it)
+            }
+
+            GeminiPageContent(viewModel)
         }
     }
 }
 
 @Serializable
-data class GeminiPage(
-    val link: String
-): Screen
+data class GeminiPage(val link: String = "")
 
