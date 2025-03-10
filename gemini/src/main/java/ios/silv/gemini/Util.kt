@@ -3,6 +3,9 @@ package ios.silv.gemini
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readUTF8LineTo
 import ios.silv.core_android.log.logcat
+import kotlinx.io.Source
+import kotlinx.io.readLine
+import kotlinx.io.readLineStrict
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.security.KeyStore
@@ -33,16 +36,11 @@ internal fun buildTlsCertificateIfNeeded(certPEM: ByteArray, keyPEM: ByteArray):
 }
 
 @Throws(IOException::class)
-suspend fun getHeader(conn: ByteReadChannel): Result<Header> = runCatching {
-    val result = StringBuilder()
-    val completed = conn.readUTF8LineTo(result, 4096)
-    if (!completed)  {
-        logcat("GeminiClient") { result.toString() }
-        error("Header not formatted correctly")
-    }
+internal fun getHeader(source: Source): Result<Header> = runCatching {
+    val line =  source.readLineStrict(4096)
 
-    val line = result.toString()
     logcat("GeminiClient") { line }
+
     val fields = line.split(" ")
 
     if (fields.size < 2) {

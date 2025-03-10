@@ -14,9 +14,13 @@ import io.ktor.network.tls.addKeyStore
 import io.ktor.network.tls.tls
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
+import io.ktor.utils.io.asSink
+import io.ktor.utils.io.asSource
 import io.ktor.utils.io.cancel
+import io.ktor.utils.io.close
 import io.ktor.utils.io.core.copy
 import io.ktor.utils.io.jvm.javaio.toByteReadChannel
+import io.ktor.utils.io.read
 import io.ktor.utils.io.readRemaining
 import io.ktor.utils.io.writeString
 import ios.silv.core_android.log.LogPriority.ERROR
@@ -34,6 +38,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.Source
+import kotlinx.io.asSource
+import kotlinx.io.buffered
+import kotlinx.io.writeString
 import java.io.File
 import java.security.KeyStore
 import java.security.SecureRandom
@@ -149,31 +156,27 @@ class GeminiClient(
 
     private suspend fun readResponseFromCache(file: File, redirected: Int = 0): Result<Response> {
         return suspendRunCatching {
-            val rc = file.inputStream().toByteReadChannel(config.dispatcher)
-            val header = getHeader(rc).getOrThrow()
+            file.inputStream().asSource().buffered().use { source ->
 
-            if (header.status == GeminiCode.StatusRedirectPermanent) {
+                val header = getHeader(source).getOrThrow()
 
-                rc.cancel()
+                if (header.status == GeminiCode.StatusRedirectPermanent) {
+                    return@suspendRunCatching fetchWithHostAndCert(
+                        Url(header.meta),
+                        byteArrayOf(),
+                        byteArrayOf(),
+                        (redirected + 1)
+                    )
+                        .getOrThrow()
+                }
 
-                return@suspendRunCatching fetchWithHostAndCert(
-                    Url(header.meta),
-                    byteArrayOf(),
-                    byteArrayOf(),
-                    (redirected + 1)
+                Response(
+                    status = header.status,
+                    meta = header.meta,
+                    body = source.copy(),
+                    cert = null
                 )
-                    .getOrThrow()
             }
-
-            val body = rc.readRemaining().copy()
-            rc.cancel()
-
-            Response(
-                status = header.status,
-                meta = header.meta,
-                body = body,
-                cert = null
-            )
         }
     }
 
@@ -269,42 +272,37 @@ class GeminiClient(
 
             conn.writeChannel.writeString("${url}\r\n")
 
-            val rc = conn.readChannel
-            val header = getHeader(rc).getOrThrow()
+            conn.readChannel.asSource().buffered().use { source ->
+                val header = getHeader(source).getOrThrow()
+                if (
+                    header.status == GeminiCode.StatusRedirectPermanent
+                    || header.status == GeminiCode.StatusRedirectTemporary
+                ) {
+                    return@suspendRunCatching handleRedirect(
+                        header, redirected, url, certPEM, keyPEM
+                    )
+                }
 
-            if (
-                header.status == GeminiCode.StatusRedirectPermanent
-                || header.status == GeminiCode.StatusRedirectTemporary
-            ) {
-                rc.cancel()
-                return@suspendRunCatching handleRedirect(
-                    header, redirected, url, certPEM, keyPEM
+                if (header.status == GeminiCode.StatusSuccess) {
+                    cache.cacheResponse(
+                        url = url.toString(),
+                        header = "${header.status} ${header.meta}\r\n",
+                        // TODO(copy may not be needed)
+                        source = source.copy()
+                    )
+                }
+                // need to suck the shit up with cpy so
+                // sock closing doesn't cancel channel when
+                // the parser is parsing
+                val body = source.copy()
+
+                Response(
+                    status = header.status,
+                    meta = header.meta,
+                    body = body,
+                    cert = null
                 )
             }
-
-            // need to suck the shit up with cpy so
-            // sock closing doesn't cancel channel when
-            // the parser is parsing
-            val source = rc.readRemaining()
-            val body = source.copy()
-
-            if (header.status == GeminiCode.StatusSuccess) {
-                cache.cacheResponse(
-                    url = url.toString(),
-                    header = "${header.status} ${header.meta}\r\n",
-                    // TODO(copy may not be needed)
-                    source = source.copy()
-                )
-            }
-
-            rc.cancel()
-
-            Response(
-                status = header.status,
-                meta = header.meta,
-                body = body,
-                cert = null
-            )
         }
     }
 
@@ -320,11 +318,13 @@ class GeminiClient(
         }
 
         if (header.status == GeminiCode.StatusRedirectPermanent) {
-            cache.cacheResponse(
-                url = url.toString(),
-                header = "${header.status} ${header.meta}\r\n",
-                source = ByteReadChannel(byteArrayOf()).readRemaining()
-            )
+            ByteReadChannel(byteArrayOf()).readRemaining().use { source ->
+                cache.cacheResponse(
+                    url = url.toString(),
+                    header = "${header.status} ${header.meta}\r\n",
+                    source = source
+                )
+            }
         }
 
         return fetchWithHostAndCert(
