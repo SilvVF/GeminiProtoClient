@@ -2,6 +2,7 @@
 
 package ios.silv.gemclient.tab
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -40,6 +41,12 @@ fun NavGraphBuilder.geminiPageDestination() {
         }
 
         val state by viewModel.tabState.collectAsStateWithLifecycle()
+
+        BackHandler {
+            viewModel.dispatch {
+                goBack()
+            }
+        }
 
         GeminiPageContent(
             dispatcher = viewModel,
@@ -132,7 +139,6 @@ private fun GeminiPageContent(
                             is ContentNode.Error -> {
                                 Text(node.message)
                             }
-
                             is ContentNode.Line.Link -> {
                                 TextButton(
                                     onClick = {

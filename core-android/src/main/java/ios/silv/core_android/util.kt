@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
+import kotlin.coroutines.cancellation.CancellationException
 
 @JvmName("mutate_List")
 fun <T> MutableStateFlow<List<T>>.mutate(update: MutableList<T>.() -> Unit) {
@@ -38,6 +39,20 @@ class MutableStateFlowList<T: Any>(
         }
     }
 }
+
+/**
+ * Attempts [block], returning a successful [Result] if it succeeds, otherwise a [Result.Failure]
+ * taking care not to break structured concurrency
+ */
+suspend fun <T> suspendRunCatching(block: suspend () -> T): Result<T> =
+    try {
+        Result.success(block())
+    } catch (cancellationException: CancellationException) {
+        throw cancellationException
+    } catch (exception: Exception) {
+        Result.failure(exception)
+    }
+
 
 /**
  * The restartable interface defines one action: [restart].

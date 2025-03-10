@@ -1,12 +1,19 @@
 package ios.silv.gemini
 
 import android.content.Context
+import io.ktor.http.escapeIfNeeded
+import io.ktor.utils.io.core.copyTo
 import ios.silv.core_android.log.logcat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.io.Sink
+import kotlinx.io.Source
+import kotlinx.io.asSink
+import kotlinx.io.buffered
+import kotlinx.io.writeString
 import okio.buffer
 import okio.sink
 import java.io.File
@@ -97,7 +104,7 @@ class GeminiCache(private val context: Context) {
         }
     }
 
-    suspend fun cacheResponse(url: String, source: okio.Source) {
+    suspend fun cacheResponse(url: String, header: String, source: Source) {
         mutex.withLock {
             val key = hashForKey(url)
 
@@ -105,8 +112,9 @@ class GeminiCache(private val context: Context) {
                 createNewFile()
             }
 
-            file.outputStream().sink().buffer().use { sink ->
-                sink.writeAll(source)
+            source.use { src ->
+
+                copySource(src, header, file.outputStream().asSink().buffered())
             }
 
             val modifiedAt = System.currentTimeMillis()
@@ -118,6 +126,15 @@ class GeminiCache(private val context: Context) {
             bytes += file.length()
 
             cleanupIfNeeded()
+        }
+    }
+
+    private fun copySource(source: Source, header: String, sink: Sink) {
+        source.use { src ->
+            sink.use { dest ->
+                dest.writeString(header.removeSuffix("\r\n") + "\r\n")
+                src.transferTo(dest)
+            }
         }
     }
 }

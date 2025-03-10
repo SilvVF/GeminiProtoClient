@@ -36,16 +36,7 @@ object GeminiParser {
 }
 
 // #...[<whitespace>]<heading>
-private val headingRegex = Regex("(?m)^#+[ \\t]+\\S.*$")
-
-// [<whitespace>]<URL>[<whitespace><USER-FRIENDLY LINK NAME>]
-private val linkRegex = """\s*([^\s\[]+)\s*(?:\[(.*)])?""".toRegex()
-
-private fun parseLink(input: String): Pair<String, String>? {
-    val match = linkRegex.find(input) ?: return null
-    val (url, friendlyName) = match.destructured
-    return url to friendlyName
-}
+private val headingRegex = Regex("#+\\s+.*")
 
 private fun resolveUrl(baseUrl: String, url: String): String {
     val baseUri = URI(baseUrl)
@@ -68,7 +59,7 @@ private const val QUOTE_PREFIX = ">"
 private const val PREFORMAT_PREFIX = "```"
 
 private fun parseText(query: String, body: String): Flow<ContentNode.Line> = flow {
-    for (block in body.split("\r\n")) {
+    for (block in body.split("\n", "\r\n").filter { it.isNotBlank() }) {
         val node = when {
             block.matches(headingRegex) -> ContentNode.Line.Heading(
                 level = block.takeWhile { c -> c == '#' }.length,
@@ -83,17 +74,16 @@ private fun parseText(query: String, body: String): Flow<ContentNode.Line> = flo
                 }
             )
 
-            block.startsWith(LINK_PREFIX) &&
-                    parseLink(block.drop(2)) != null -> {
-                val (url, name) = parseLink(block.drop(2))!!
+            block.startsWith(LINK_PREFIX)-> {
+                val split = block.removePrefix(LINK_PREFIX).trimStart().split(Regex("\\s+"), limit = 2)
                 ContentNode.Line.Link(
                     text = block,
-                    url = if (isRelativeUrl(url)) {
-                        resolveUrl(query, url)
+                    url = if (isRelativeUrl(split[0])) {
+                        resolveUrl(query, split[0].trim())
                     } else {
-                        url
+                        split[0].trim()
                     },
-                    name = name
+                    name = split.getOrNull(1) ?: split[0]
                 )
             }
 
@@ -114,6 +104,7 @@ private fun parseText(query: String, body: String): Flow<ContentNode.Line> = flo
 
             else -> ContentNode.Line.Text(block)
         }
+        logcat { node::class.toString() }
         emit(node)
     }
 }

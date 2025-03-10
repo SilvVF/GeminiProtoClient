@@ -1,13 +1,14 @@
 package ios.silv.gemini
 
-import android.annotation.SuppressLint
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
-import io.ktor.http.fullPath
-import io.ktor.http.protocolWithAuthority
 import io.ktor.http.set
+import io.ktor.network.selector.ActorSelectorManager
 import io.ktor.network.selector.SelectorManager
+import io.ktor.network.sockets.Socket
 import io.ktor.network.sockets.aSocket
+import io.ktor.network.sockets.awaitClosed
+import io.ktor.network.sockets.isClosed
 import io.ktor.network.sockets.openReadChannel
 import io.ktor.network.sockets.openWriteChannel
 import io.ktor.network.tls.addKeyStore
@@ -16,18 +17,26 @@ import io.ktor.util.cio.use
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.InternalAPI
-import io.ktor.utils.io.copyAndClose
+import io.ktor.utils.io.cancel
 import io.ktor.utils.io.core.copy
+import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import io.ktor.utils.io.readRemaining
 import io.ktor.utils.io.writeString
+import ios.silv.core_android.log.LogPriority
+import ios.silv.core_android.log.LogPriority.*
 import ios.silv.core_android.log.logcat
+import ios.silv.core_android.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.io.Source
+import java.io.File
+import java.security.KeyStore
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import kotlin.coroutines.CoroutineContext
-import kotlin.math.log
 
 
 internal const val URLMaxLength = 1024
@@ -100,23 +109,75 @@ data class Response(
 
 data class Header(
     val status: Int,
-    val meta: String
+    val meta: String,
 )
 
 
 class GeminiClient(
     private val cache: GeminiCache
 ) {
+    data class Conn(
+        val sock: Socket,
+        val writeChannel: ByteWriteChannel,
+        val readChannel: ByteReadChannel,
+    )
 
-    private val geminiDispatcher: CoroutineContext = Dispatchers.IO.limitedParallelism(2)
+    private val geminiDispatcher: CoroutineContext = Dispatchers.IO
+    private val selector = ActorSelectorManager(geminiDispatcher + SupervisorJob())
+
+    private val conns = mutableMapOf<String, Conn>()
+    private val mutex = Mutex()
 
     suspend fun makeGeminiQuery(query: String): Result<Response> {
         return withContext(geminiDispatcher) { fetch(query) }
     }
 
     private suspend fun fetch(rawUrl: String): Result<Response> {
-        return runCatching {
+        return suspendRunCatching {
             fetchWithHostAndCert(Url(rawUrl), byteArrayOf(), byteArrayOf()).getOrThrow()
+        }
+    }
+
+    private suspend fun readResponseFromCache(file: File): Result<Response> {
+        return suspendRunCatching {
+            val rc = file.inputStream().toByteReadChannel(geminiDispatcher)
+            val header = getHeader(rc).getOrThrow()
+
+            // need to suck the shit up and cpy so
+            // sock closing doesn't cancel channel when
+            // the parser is parsing
+            val body = rc.readRemaining().copy()
+            rc.cancel()
+
+            Response(
+                status = header.status,
+                meta = header.meta,
+                body = body,
+                cert = null
+            )
+        }
+    }
+
+    private suspend fun openNewConnection(url: Url, port: Int, keystore: KeyStore?): Conn {
+        val socket = aSocket(selector).tcp().connect(
+            url.host,
+            port,
+        )
+            .tls(Dispatchers.IO) {
+                random = SecureRandom()
+                if (keystore != null) {
+                    addKeyStore(keystore, null, "certificate")
+                } else {
+                    trustManager = SslSettings.getTrustManager()
+                }
+            }
+
+        return Conn(
+            socket,
+            socket.openWriteChannel(true),
+            socket.openReadChannel()
+        ).also {
+            conns[url.toString()] = it
         }
     }
 
@@ -124,7 +185,17 @@ class GeminiClient(
     private suspend fun fetchWithHostAndCert(
         url: Url, certPEM: ByteArray, keyPEM: ByteArray
     ): Result<Response> {
-        return runCatching {
+        return suspendRunCatching {
+            val cached = cache.getResponse(url.toString())
+            if (cached != null) {
+                logcat { "Found entry in cache for $url" }
+                readResponseFromCache(cached).onSuccess { response ->
+                    return@suspendRunCatching response
+                }.onFailure {
+                    cache.deleteResponse("$url")
+                    logcat(ERROR) { "failed to parse cache entry for $url ${it.message}" }
+                }
+            }
 
             val urlBuilder = URLBuilder(url)
             val urlLength = url.toString().length
@@ -142,41 +213,50 @@ class GeminiClient(
                     port = 1965
                 }
             }
+            val port = urlBuilder.build().port
 
             val keystore = buildTlsCertificateIfNeeded(certPEM, keyPEM).getOrNull()
 
-            aSocket(SelectorManager(Dispatchers.IO)).tcp().connect(
-                url.host,
-                urlBuilder.build().port,
+            logcat { "Trying to connect to ${url.host} $port - $url" }
+
+
+            val conn = mutex.withLock {
+                val open = conns[url.toString()]
+
+                if (open != null && !open.sock.isClosed) {
+                    open
+                } else {
+                    open?.sock?.close()
+                    conns.remove(url.toString())
+                    openNewConnection(url, port, keystore)
+                }
+            }
+
+            conn.writeChannel.writeString("${url}\r\n")
+
+            val rc = conn.readChannel
+            val header = getHeader(rc).getOrThrow()
+
+            // need to suck the shit up and cpy so
+            // sock closing doesn't cancel channel when
+            // the parser is parsing
+            val source = rc.readRemaining()
+            val body = source.copy()
+
+            if (header.status == GeminiCode.StatusSuccess) {
+                cache.cacheResponse(
+                    url = url.toString(),
+                    header = "${header.status} ${header.meta}\r\n",
+                    source = source.copy()
+                )
+            }
+
+            Response(
+                status = header.status,
+                meta = header.meta,
+                body = body,
+                cert = null
             )
-                .tls(Dispatchers.IO) {
-                    random = SecureRandom()
-                    if (keystore != null) {
-                        addKeyStore(keystore, null, "certificate")
-                    } else {
-                        trustManager = SslSettings.getTrustManager()
-                    }
-                }
-                .use { conn ->
-                    conn.openWriteChannel().use {
-                        writeString("${url}\r\n")
-                    }
-
-                    val rc = conn.openReadChannel()
-                    val header = getHeader(rc).getOrThrow()
-
-                    // need to suck the shit up and cpy so
-                    // sock closing doesn't cancel channel when
-                    // the parser is parsing
-                    val body = rc.readRemaining().copy()
-
-                    Response(
-                        status = header.status,
-                        meta = header.meta,
-                        body = body,
-                        cert = null
-                    )
-                }
         }
     }
 }
