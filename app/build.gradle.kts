@@ -71,6 +71,7 @@ dependencies {
 
     api(project(":core-android"))
     api(project(":gemini"))
+    api(project(":database"))
 
     implementation(libs.bundles.compose.ui)
     implementation(libs.bundles.compose.runtime)

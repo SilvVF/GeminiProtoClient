@@ -177,7 +177,7 @@ class GeminiClient(
             socket.openWriteChannel(true),
             socket.openReadChannel()
         ).also {
-            conns[url.toString()] = it
+            conns["${url.host}:$port"] = it
         }
     }
 
@@ -219,15 +219,15 @@ class GeminiClient(
 
             logcat { "Trying to connect to ${url.host} $port - $url" }
 
-
             val conn = mutex.withLock {
-                val open = conns[url.toString()]
+                val key = "${url.host}:$port"
+                val open = conns[key]
 
                 if (open != null && !open.sock.isClosed) {
                     open
                 } else {
                     open?.sock?.close()
-                    conns.remove(url.toString())
+                    conns.remove(key)
                     openNewConnection(url, port, keystore)
                 }
             }

@@ -1,5 +1,7 @@
 package ios.silv.gemclient.tab
 
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.viewModelScope
 import ios.silv.core_android.StateFlowStack
 import ios.silv.core_android.restartableStateIn
@@ -12,8 +14,11 @@ import ios.silv.gemini.ContentNode
 import ios.silv.gemini.GeminiParser
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.transformLatest
+import java.util.UUID
+import kotlin.uuid.Uuid
 
 interface GeminiTabViewModelAction {
     fun loadPage(link: String)
@@ -21,9 +26,17 @@ interface GeminiTabViewModelAction {
     fun refresh()
 }
 
+@Immutable
+@Stable
+data class UiNode(
+    val node: ContentNode,
+    val key: String? = null,
+    val contentType: String = node::class.toString()
+)
+
 sealed class TabState(val route: String) {
     data class Loading(val url: String) : TabState(url)
-    data class Done(val url: String, val nodes: List<ContentNode>) : TabState(url)
+    data class Done(val url: String, val nodes: List<UiNode>) : TabState(url)
 }
 
 class GeminiTabViewModel @OptIn(DependencyAccessor::class) constructor(
@@ -43,10 +56,31 @@ class GeminiTabViewModel @OptIn(DependencyAccessor::class) constructor(
 
         client.makeGeminiQuery(current).onSuccess {
             logcat { it.toString() }
-            emit(TabState.Done(current, GeminiParser.parse(current, it).toList()))
+            emit(
+                TabState.Done(
+                    current,
+                    GeminiParser.parse(current, it).map { node ->
+                        UiNode(
+                            node,
+                            UUID.randomUUID().toString()
+                        )
+                    }
+                        .toList()
+                )
+            )
         }.onFailure {
             logcat { it.stackTraceToString() }
-            emit(TabState.Done(current, listOf(ContentNode.Error(it.message.orEmpty()))))
+            emit(
+                TabState.Done(
+                    current,
+                    listOf(
+                        UiNode(
+                            ContentNode.Error(it.message.orEmpty()),
+                            UUID.randomUUID().toString(),
+                        )
+                    )
+                )
+            )
         }
     }
         .restartableStateIn(

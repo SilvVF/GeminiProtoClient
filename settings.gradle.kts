@@ -24,3 +24,4 @@ rootProject.name = "GemClient"
 include(":app")
 include(":gemini")
 include(":core-android")
+include(":database")
