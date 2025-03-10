@@ -4,33 +4,35 @@ import io.ktor.http.ContentType
 import io.ktor.utils.io.CancellationException
 import io.ktor.utils.io.charsets.forName
 import io.ktor.utils.io.core.readText
-import io.ktor.utils.io.readRemaining
 import ios.silv.core_android.log.logcat
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.io.readByteArray
 import java.net.URI
 
 object GeminiParser {
 
-    suspend fun parse(query: String, res: Response): Flow<ContentNode> {
+    fun parse(query: String, res: Response): Flow<ContentNode> {
         return try {
-            res.body.use { src ->
-                val (mediaType, params) = decodeMeta(res.meta).getOrThrow()
-                val encoding = params.getOrDefault("charset", "utf-8")
-
-                val text = src.readText(Charsets.forName(encoding))
-
-                return when {
-                    mediaType.startsWith("text") -> parseText(query, text)
-                    else -> TODO("Unimplemented Content Type")
-                }
-            }
+           handleSuccess(query, res)
         } catch (e: Exception) {
             if (e is CancellationException) throw e
 
             flowOf(ContentNode.Error(e.message.orEmpty()))
+        }
+    }
+
+    private fun handleSuccess(query: String, res: Response): Flow<ContentNode> {
+        res.body.use { src ->
+            val (mediaType, params) = decodeMeta(res.meta).getOrThrow()
+            val encoding = params.getOrDefault("charset", "utf-8")
+
+            val text = src.readText(Charsets.forName(encoding))
+
+            return when {
+                mediaType.startsWith("text") -> parseText(query, text)
+                else -> TODO("Unimplemented Content Type")
+            }
         }
     }
 }

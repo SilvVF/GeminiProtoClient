@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
                         NavHost(
                             navController,
                             modifier = Modifier.padding(innerPadding),
-                            startDestination = GeminiTab("gemini://geminiprotocol.net/docs/faq.gmi"),
+                            startDestination = GeminiTab("gemini://gemini.circumlunar.space/docs/specification.gmi"),
                         ) {
                             geminiPageDestination()
                         }

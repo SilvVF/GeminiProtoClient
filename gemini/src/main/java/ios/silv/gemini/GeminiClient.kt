@@ -8,40 +8,42 @@ import io.ktor.network.selector.SelectorManager
 import io.ktor.network.sockets.Socket
 import io.ktor.network.sockets.aSocket
 import io.ktor.network.sockets.awaitClosed
-import io.ktor.network.sockets.isClosed
 import io.ktor.network.sockets.openReadChannel
 import io.ktor.network.sockets.openWriteChannel
 import io.ktor.network.tls.addKeyStore
 import io.ktor.network.tls.tls
-import io.ktor.util.cio.use
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
-import io.ktor.utils.io.InternalAPI
 import io.ktor.utils.io.cancel
 import io.ktor.utils.io.core.copy
 import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import io.ktor.utils.io.readRemaining
 import io.ktor.utils.io.writeString
-import ios.silv.core_android.log.LogPriority
-import ios.silv.core_android.log.LogPriority.*
+import ios.silv.core_android.log.LogPriority.ERROR
 import ios.silv.core_android.log.logcat
 import ios.silv.core_android.suspendRunCatching
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.io.Source
 import java.io.File
 import java.security.KeyStore
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import kotlin.coroutines.CoroutineContext
-
+import kotlin.time.Duration.Companion.seconds
 
 internal const val URLMaxLength = 1024
 internal const val MetaMaxLength = 1024
-
+internal val SOCKET_CLOSE_TIMEOUT = 10.seconds
 
 // Gemini status codes as defined in the Gemini spec Appendix 1.
 object GeminiCode {
@@ -112,9 +114,18 @@ data class Header(
     val meta: String,
 )
 
+data class ClientConfig(
+    val dispatcher: CoroutineContext =
+        Dispatchers.IO +
+                SupervisorJob() +
+                CoroutineName("GeminiClientScope"),
+    val selector: SelectorManager = ActorSelectorManager(dispatcher),
+    val maxRedirects: Int = 5
+)
 
 class GeminiClient(
-    private val cache: GeminiCache
+    private val cache: GeminiCache,
+    private val config: ClientConfig = ClientConfig()
 ) {
     data class Conn(
         val sock: Socket,
@@ -122,14 +133,12 @@ class GeminiClient(
         val readChannel: ByteReadChannel,
     )
 
-    private val geminiDispatcher: CoroutineContext = Dispatchers.IO
-    private val selector = ActorSelectorManager(geminiDispatcher + SupervisorJob())
-
+    private val selector = config.selector
     private val conns = mutableMapOf<String, Conn>()
     private val mutex = Mutex()
 
     suspend fun makeGeminiQuery(query: String): Result<Response> {
-        return withContext(geminiDispatcher) { fetch(query) }
+        return withContext(config.dispatcher) { fetch(query) }
     }
 
     private suspend fun fetch(rawUrl: String): Result<Response> {
@@ -138,14 +147,24 @@ class GeminiClient(
         }
     }
 
-    private suspend fun readResponseFromCache(file: File): Result<Response> {
+    private suspend fun readResponseFromCache(file: File, redirected: Int = 0): Result<Response> {
         return suspendRunCatching {
-            val rc = file.inputStream().toByteReadChannel(geminiDispatcher)
+            val rc = file.inputStream().toByteReadChannel(config.dispatcher)
             val header = getHeader(rc).getOrThrow()
 
-            // need to suck the shit up and cpy so
-            // sock closing doesn't cancel channel when
-            // the parser is parsing
+            if (header.status == GeminiCode.StatusRedirectPermanent) {
+
+                rc.cancel()
+
+                return@suspendRunCatching fetchWithHostAndCert(
+                    Url(header.meta),
+                    byteArrayOf(),
+                    byteArrayOf(),
+                    (redirected + 1)
+                )
+                    .getOrThrow()
+            }
+
             val body = rc.readRemaining().copy()
             rc.cancel()
 
@@ -181,15 +200,14 @@ class GeminiClient(
         }
     }
 
-    @OptIn(InternalAPI::class)
     private suspend fun fetchWithHostAndCert(
-        url: Url, certPEM: ByteArray, keyPEM: ByteArray
+        url: Url, certPEM: ByteArray, keyPEM: ByteArray, redirected: Int = 0
     ): Result<Response> {
         return suspendRunCatching {
             val cached = cache.getResponse(url.toString())
             if (cached != null) {
                 logcat { "Found entry in cache for $url" }
-                readResponseFromCache(cached).onSuccess { response ->
+                readResponseFromCache(cached, redirected).onSuccess { response ->
                     return@suspendRunCatching response
                 }.onFailure {
                     cache.deleteResponse("$url")
@@ -222,14 +240,31 @@ class GeminiClient(
             val conn = mutex.withLock {
                 val key = "${url.host}:$port"
                 val open = conns[key]
-
-                if (open != null && !open.sock.isClosed) {
-                    open
-                } else {
-                    open?.sock?.close()
-                    conns.remove(key)
-                    openNewConnection(url, port, keystore)
+                // The server should have closed the connection after
+                // sending response if not try and close (no-op if closed)
+                /*
+                    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⢄⠀⣔⣄⡀⠀⣠⣄⠀⠀⠀
+                    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡼⠿⠟⢻⣿⣯⣻⣩⢞⣭⣿⣿⣶⢤⡀
+                    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠴⠚⠁⢀⣠⣾⠽⠟⠻⠿⣿⡿⠋⠡⠀⠉⠢⡑
+                    ⠀⠀⠀⠀⠀⠀⠀⣀⠤⠒⠉⠀⠀⠀⠀⢻⠟⠁⠤⠒⠁⠀⢸⡄⠀⠀⠀⠀⠀⢹
+                    ⠀⠀⠀⣀⡤⠖⠉⠀⠀⠀⠀⠀⠀⠀⠀⡏⠀⠀⠀⠀⠀⠀⢀⡷⡄⠀⠀⠀⢀⣼
+                    ⠀⡠⠚⠁⠀⠀⠀⠀⠀⠀⠀⠀⠸⣦⡀⠳⣄⡀⠀⠀⣀⡞⠋⠋⠻⣦⣤⠴⠚⠉
+                    ⡾⠁⢀⡖⢁⡤⠔⠒⠒⠒⠒⠦⢤⣀⣉⣓⠚⠛⠋⠉⠀⡇⠀⠀⠀⣟⢀⣀⠤⢾
+                    ⣇⠀⢸⢠⡏⠀⠀⠛⠓⠒⠶⠶⠤⢤⣄⣉⣉⣉⠛⠛⣿⠁⠀⠀⠀⢸⣁⣀⡤⠋
+                    ⣿⢦⡀⠀⠙⠒⠒⠒⠒⠒⠲⠦⢤⣤⣀⣀⣉⣉⣉⣉⡿⠀⠀⠀⠀⠸⣏⣩⢷⠿
+                    ⠛⢦⣵⣤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⢉⡇⠀⠀⠀⠀⠀⢻⡷⠁⠀
+                    ⠀⠀⠈⠉⠛⠳⠶⣤⣤⣤⣤⣤⣤⣀⣀⣀⣠⣶⣊⡿⠀⠀⠀⠀⠀⠀⠀⢣⡤⠤
+                    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⣉⣉⣉⠉⠀⠀⢻⡄⠀⠀⠀⠀⠀⠀⠀⣸⠃⠀
+                    DON'T TIMEOUT
+                 */
+                withTimeout(SOCKET_CLOSE_TIMEOUT) {
+                    open?.sock?.let { s ->
+                        s.close()
+                        s.awaitClosed()
+                    }
                 }
+                conns.remove(key)
+                openNewConnection(url, port, keystore)
             }
 
             conn.writeChannel.writeString("${url}\r\n")
@@ -237,7 +272,17 @@ class GeminiClient(
             val rc = conn.readChannel
             val header = getHeader(rc).getOrThrow()
 
-            // need to suck the shit up and cpy so
+            if (
+                header.status == GeminiCode.StatusRedirectPermanent
+                || header.status == GeminiCode.StatusRedirectTemporary
+            ) {
+                rc.cancel()
+                return@suspendRunCatching handleRedirect(
+                    header, redirected, url, certPEM, keyPEM
+                )
+            }
+
+            // need to suck the shit up with cpy so
             // sock closing doesn't cancel channel when
             // the parser is parsing
             val source = rc.readRemaining()
@@ -247,9 +292,12 @@ class GeminiClient(
                 cache.cacheResponse(
                     url = url.toString(),
                     header = "${header.status} ${header.meta}\r\n",
+                    // TODO(copy may not be needed)
                     source = source.copy()
                 )
             }
+
+            rc.cancel()
 
             Response(
                 status = header.status,
@@ -258,6 +306,32 @@ class GeminiClient(
                 cert = null
             )
         }
+    }
+
+    private suspend fun handleRedirect(
+        header: Header,
+        redirected: Int,
+        url: Url,
+        certPEM: ByteArray,
+        keyPEM: ByteArray,
+    ): Response {
+        if (redirected > config.maxRedirects) {
+            error("client was redirected $redirected times > max ${config.maxRedirects}")
+        }
+
+        if (header.status == GeminiCode.StatusRedirectPermanent) {
+            cache.cacheResponse(
+                url = url.toString(),
+                header = "${header.status} ${header.meta}\r\n",
+                source = ByteReadChannel(byteArrayOf()).readRemaining()
+            )
+        }
+
+        return fetchWithHostAndCert(
+            Url(header.meta), certPEM, keyPEM,
+            (redirected + 1)
+        )
+            .getOrThrow()
     }
 }
 

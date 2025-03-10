@@ -113,8 +113,10 @@ class GeminiCache(private val context: Context) {
             }
 
             source.use { src ->
-
-                copySource(src, header, file.outputStream().asSink().buffered())
+                file.outputStream().asSink().buffered().use { dest ->
+                    dest.writeString(header.removeSuffix("\r\n") + "\r\n")
+                    src.transferTo(dest)
+                }
             }
 
             val modifiedAt = System.currentTimeMillis()
@@ -126,15 +128,6 @@ class GeminiCache(private val context: Context) {
             bytes += file.length()
 
             cleanupIfNeeded()
-        }
-    }
-
-    private fun copySource(source: Source, header: String, sink: Sink) {
-        source.use { src ->
-            sink.use { dest ->
-                dest.writeString(header.removeSuffix("\r\n") + "\r\n")
-                src.transferTo(dest)
-            }
         }
     }
 }
