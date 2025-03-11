@@ -7,8 +7,8 @@ import ios.silv.core_android.StateFlowStack
 import ios.silv.core_android.log.logcat
 import ios.silv.core_android.restartableStateIn
 import ios.silv.gemclient.GeminiTab
+import ios.silv.gemclient.base.ViewModelActionHandler
 import ios.silv.gemclient.dependency.DependencyAccessor
-import ios.silv.gemclient.dependency.ViewModelActionHandler
 import ios.silv.gemclient.dependency.commonDeps
 import ios.silv.gemini.ContentNode
 import ios.silv.gemini.GeminiCode
