@@ -2,12 +2,22 @@ package ios.silv.gemclient.ui
 
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.sample
+import kotlinx.coroutines.withContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -27,5 +37,22 @@ fun LazyListState.sampleScrollingState(sample: Duration = 800.milliseconds): Sta
             .collect { (visibleIdx, scrolling) ->
                 value = visibleIdx > 0 && scrolling
             }
+    }
+}
+
+@Composable
+fun LaunchedOnStartedEffect(
+    vararg keys: Any?,
+    block: suspend CoroutineScope.() -> Unit
+) {
+    val lifecycle = LocalLifecycleOwner.current
+    val callback by rememberUpdatedState(block)
+
+    LaunchedEffect(lifecycle, *keys) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            withContext(Dispatchers.Main.immediate) {
+                callback()
+            }
+        }
     }
 }

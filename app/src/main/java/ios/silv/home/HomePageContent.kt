@@ -31,12 +31,12 @@ import ios.silv.gemclient.GeminiHome
 import ios.silv.gemclient.GeminiSettings
 import ios.silv.gemclient.base.ActionDispatcher
 import ios.silv.gemclient.base.LocalNavigator
-import ios.silv.gemclient.base.rememberViewModel
+import ios.silv.gemclient.base.createViewModel
 
 fun NavGraphBuilder.geminiHomeDestination() {
     composable<GeminiHome> {
 
-        val viewModel = rememberViewModel { GeminiHomeViewModel() }
+        val viewModel = createViewModel { GeminiHomeViewModel() }
 
         val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -53,7 +53,11 @@ private fun PreviewGeminiHomeContent() {
 
     val dispatcher = remember {
         object : ActionDispatcher<GeminiHomeViewModelAction> {
-            override fun dispatch(action: GeminiHomeViewModelAction.() -> Unit) {}
+            override fun dispatch(action: suspend GeminiHomeViewModelAction.() -> Unit) {
+            }
+
+            override fun immediate(action: GeminiHomeViewModelAction.() -> Unit) {
+            }
         }
     }
 

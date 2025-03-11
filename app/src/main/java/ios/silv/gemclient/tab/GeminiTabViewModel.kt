@@ -2,19 +2,25 @@ package ios.silv.gemclient.tab
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.toRoute
 import ios.silv.core_android.StateFlowStack
 import ios.silv.core_android.log.logcat
 import ios.silv.core_android.restartableStateIn
 import ios.silv.gemclient.GeminiTab
+import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.base.ViewModelActionHandler
 import ios.silv.gemclient.dependency.DependencyAccessor
 import ios.silv.gemclient.dependency.commonDeps
 import ios.silv.gemini.ContentNode
 import ios.silv.gemini.GeminiCode
 import ios.silv.gemini.GeminiParser
+import ios.silv.gemini.Response
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.transformLatest
@@ -42,65 +48,78 @@ sealed class TabState(val route: String) {
 }
 
 class GeminiTabViewModel @OptIn(DependencyAccessor::class) constructor(
-    geminiTab: GeminiTab,
+    savedStateHandle: SavedStateHandle,
+    private val navigator: ComposeNavigator = commonDeps.navigator,
     private val client: ios.silv.gemini.GeminiClient = commonDeps.geminiClient,
 ) : GeminiTabViewModelAction, ViewModelActionHandler<GeminiTabViewModelAction>() {
 
+    private val geminiTab = savedStateHandle.toRoute<GeminiTab>()
     override val handler: GeminiTabViewModelAction = this
 
     private val stack = StateFlowStack(geminiTab.baseUrl, minSize = 1)
+    val stackAsState = stack.asStateFlow()
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val tabState = stack.stackFlow.transformLatest { stack ->
-        val current = stack.last()
+    val tabState = stack.lastItemOrNullFlow
+        .filterNotNull()
+        .distinctUntilChanged()
+        .transformLatest { current ->
 
-        emit(TabState.Loading(current))
+            emit(TabState.Loading(current))
 
-        client.makeGeminiQuery(current).onSuccess { response ->
-            logcat { "$response" }
-            if (response.status == GeminiCode.StatusInput) {
-                emit(TabState.Input(current, response.meta))
-            } else {
+            client.makeGeminiQuery(current).onSuccess { response ->
+                logcat { "$response" }
+                emit(transformSuccessResponse(current, response))
+            }.onFailure {
+                logcat { it.stackTraceToString() }
                 emit(
                     TabState.Done(
                         current,
-                        GeminiParser.parse(current, response).map { node ->
+                        listOf(
                             UiNode(
-                                node,
-                                UUID.randomUUID().toString()
+                                ContentNode.Error(it.message.orEmpty()),
+                                UUID.randomUUID().toString(),
                             )
-                        }
-                            .toList()
-                    )
-                )
-            }
-        }.onFailure {
-            logcat { it.stackTraceToString() }
-            emit(
-                TabState.Done(
-                    current,
-                    listOf(
-                        UiNode(
-                            ContentNode.Error(it.message.orEmpty()),
-                            UUID.randomUUID().toString(),
                         )
                     )
                 )
-            )
+            }
         }
-    }
         .restartableStateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000L),
             initialValue = TabState.Loading(geminiTab.baseUrl)
         )
 
+    private suspend fun transformSuccessResponse(
+        current: String,
+        response: Response
+    ): TabState {
+        return if (response.status == GeminiCode.StatusInput) {
+            TabState.Input(current, response.meta)
+        } else {
+            TabState.Done(
+                current,
+                GeminiParser.parse(current, response).map { node ->
+                    UiNode(
+                        node,
+                        UUID.randomUUID().toString()
+                    )
+                }
+                    .toList()
+            )
+        }
+    }
+
     override fun loadPage(link: String) {
         stack.push(link)
     }
 
     override fun goBack() {
-        stack.pop()
+        if (!stack.pop()) {
+            navigator.navCmds.tryEmit {
+                popBackStack()
+            }
+        }
     }
 
     override fun refresh() {

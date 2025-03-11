@@ -38,10 +38,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
-import androidx.navigation.toRoute
 import ios.silv.gemclient.GeminiTab
 import ios.silv.gemclient.base.ActionDispatcher
-import ios.silv.gemclient.base.rememberViewModel
+import ios.silv.gemclient.base.createViewModel
 import ios.silv.gemclient.ui.components.AutoScrollIndicator
 import ios.silv.gemclient.ui.sampleScrollingState
 import ios.silv.gemini.ContentNode
@@ -49,17 +48,16 @@ import kotlinx.coroutines.launch
 
 fun NavGraphBuilder.geminiPageDestination() {
     composable<GeminiTab> { backStack ->
-
-        val args = backStack.toRoute<GeminiTab>()
-
-        val viewModel: GeminiTabViewModel = rememberViewModel {
-            GeminiTabViewModel(geminiTab = args)
+        val viewModel: GeminiTabViewModel = backStack.createViewModel {
+            GeminiTabViewModel(it)
         }
 
         val state by viewModel.tabState.collectAsStateWithLifecycle()
-
-        BackHandler {
-            viewModel.dispatch {
+        val stack by  viewModel.stackAsState.collectAsStateWithLifecycle()
+        BackHandler(
+           stack.size > 1
+        ) {
+            viewModel.immediate {
                 goBack()
             }
         }
@@ -78,7 +76,8 @@ private fun PreviewDoneGeminiPageContent() {
 
     val dispatcher = remember {
         object : ActionDispatcher<GeminiTabViewModelAction> {
-            override fun dispatch(action: GeminiTabViewModelAction.() -> Unit) {}
+            override fun dispatch(action: suspend GeminiTabViewModelAction.() -> Unit) {}
+            override fun immediate(action: GeminiTabViewModelAction.() -> Unit) {}
         }
     }
 
@@ -110,7 +109,11 @@ private fun PreviewLoadingGeminiPageContent() {
 
     val dispatcher = remember {
         object : ActionDispatcher<GeminiTabViewModelAction> {
-            override fun dispatch(action: GeminiTabViewModelAction.() -> Unit) {}
+            override fun dispatch(action: suspend GeminiTabViewModelAction.() -> Unit) {
+            }
+
+            override fun immediate(action: GeminiTabViewModelAction.() -> Unit) {
+            }
         }
     }
 

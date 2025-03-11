@@ -4,29 +4,39 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ios.silv.core_android.log.logcat
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 
 @Stable
 @Immutable
 interface ActionDispatcher<T> {
-    fun dispatch(action: T.() -> Unit)
+    fun immediate(action: T.() -> Unit)
+    fun dispatch(action: suspend T.() -> Unit)
 }
 
 abstract class ViewModelActionHandler<T> : ViewModel(), ActionDispatcher<T> {
 
     protected abstract val handler: T
 
-    private val actions = Channel<T.() -> Unit>(Channel.UNLIMITED)
+    private val actions = Channel<suspend T.() -> Unit>(Channel.UNLIMITED)
 
-    override fun dispatch(action: T.() -> Unit) {
+    override fun dispatch(action: suspend T.() -> Unit) {
         actions.trySend(action)
     }
+
+    override fun immediate(action: T.() -> Unit) = handler.action()
 
     init {
         viewModelScope.launch {
             for (action in actions) {
-                action(handler)
+                try {
+                    action(handler)
+                } catch (e: Exception){
+                    if (e is CancellationException) throw e
+                    logcat { "$action had an error ${e.message}" }
+                }
             }
         }
     }

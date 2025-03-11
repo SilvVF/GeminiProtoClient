@@ -1,51 +1,37 @@
 package ios.silv.gemclient.base
 
-import androidx.activity.ComponentActivity
-import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalSavedStateRegistryOwner
 import androidx.lifecycle.AbstractSavedStateViewModelFactory
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-
-/**
- * Creates a `ViewModel`.
- *
- * The [provider] should instantiate the `ViewModel` directly.
- *
- */
-@Suppress("UNCHECKED_CAST")
-public inline fun <reified T : ViewModel> ComponentActivity.buildViewModel(crossinline provider: () -> T): Lazy<T> =
-    viewModels {
-        object : ViewModelProvider.Factory {
-            override fun <T : ViewModel> create(modelClass: Class<T>): T = provider() as T
-        }
-    }
+import androidx.navigation.NavBackStackEntry
 
 @Composable
 @Suppress("UNCHECKED_CAST")
-public inline fun <reified T : ViewModel> rememberViewModel(
+public inline fun <reified T : ViewModel> createViewModel(
     crossinline provider: () -> T,
 ): T {
     return viewModel(
         factory = object : ViewModelProvider.Factory {
-            override fun <T : ViewModel> create(modelClass: Class<T>): T = provider() as T
+            override fun <T : ViewModel> create(
+                modelClass: Class<T>
+            ): T = provider() as T
         }
     )
 }
 
+@Composable
 @Suppress("UNCHECKED_CAST")
-public inline fun <reified T : ViewModel> ComponentActivity.stateViewModel(
+public inline fun <reified T : ViewModel> NavBackStackEntry.createViewModel(
     crossinline provider: (handle: SavedStateHandle) -> T,
-): Lazy<T> =
-    viewModels {
-        object : AbstractSavedStateViewModelFactory(this@stateViewModel, null) {
-            override fun <T : ViewModel> create(
-                key: String,
-                modelClass: Class<T>,
-                handle: SavedStateHandle,
-            ): T = provider(handle) as T
-        }
+): T = viewModel(
+    factory = object : AbstractSavedStateViewModelFactory(this, arguments) {
+        override fun <T : ViewModel> create(
+            key: String,
+            modelClass: Class<T>,
+            handle: SavedStateHandle,
+        ): T = provider(handle) as T
     }
+)

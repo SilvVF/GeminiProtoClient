@@ -1,7 +1,9 @@
 package ios.silv.core_android
 
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
 public inline fun <reified I : Item, Item> Stack<Item>.popUntil(): Boolean =
@@ -71,7 +73,7 @@ public class StateFlowStack<Item: Any>(
 
     private val _stateStack = MutableStateFlowList(items.toList())
 
-    val stackFlow get() = _stateStack.asStateFlow()
+    fun asStateFlow() = _stateStack.asStateFlow()
     val stateStack get() = _stateStack.value
 
     private val _lastEvent = MutableStateFlow(StackEvent.Idle)
@@ -81,6 +83,8 @@ public class StateFlowStack<Item: Any>(
 
     override val items: List<Item> get() = _stateStack.value
     override val lastItemOrNull: Item? get() = _stateStack.value.lastOrNull()
+    val lastItemOrNullFlow: Flow<Item?> get() = _stateStack.map { it.lastOrNull() }
+
     override val size: Int get() = _stateStack.value.size
     override val isEmpty: Boolean get() = _stateStack.value.isEmpty()
     override val canPop: Boolean get() = _stateStack.value.size > minSize
