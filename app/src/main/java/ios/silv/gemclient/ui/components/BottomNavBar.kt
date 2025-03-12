@@ -8,15 +8,12 @@ import androidx.compose.animation.core.EaseInOutSine
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -24,6 +21,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -32,11 +30,12 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material3.CardColors
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
@@ -45,7 +44,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxState
@@ -59,11 +57,13 @@ import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -79,41 +79,46 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.lerp
 import androidx.core.view.HapticFeedbackConstantsCompat
 import androidx.core.view.ViewCompat
 import androidx.navigation.NavBackStackEntry
-import androidx.navigation.NavController
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.toRoute
+import ios.silv.gemclient.BottomBarState
+import ios.silv.gemclient.GeminiBottomBarAction
 import ios.silv.gemclient.GeminiTab
+import ios.silv.gemclient.base.ActionDispatcher
 import ios.silv.gemclient.ui.conditional
 import ios.silv.gemclient.ui.nonGoogleRetardProgress
-import kotlinx.coroutines.CoroutineScope
+import ios.silv.sqldelight.Page
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyGridState
 
+private enum class BarMode {
+    EDITING,
+    SEARCHING,
+    NONE
+}
 
-@SuppressLint("RestrictedApi")
+
+@Composable
+fun keyboardAsState(): State<Boolean> {
+    val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    return rememberUpdatedState(isImeVisible)
+}
+
 @Composable
 fun BottomSearchBarWrapper(
-    navController: NavController,
-    activeTabs: List<GeminiTab>,
+    dispatcher: ActionDispatcher<GeminiBottomBarAction>,
+    state: BottomBarState,
     modifier: Modifier = Modifier,
+    backStackEntry: NavBackStackEntry? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
-
-    val backStackEntry by navController.currentBackStackEntryAsState()
-    val tabsOrder = remember {
-        mutableStateListOf(*activeTabs.toTypedArray())
-    }
-
-    var searchText by rememberSaveable { mutableStateOf("") }
-    var searching by rememberSaveable { mutableStateOf(false) }
-    var editing by rememberSaveable { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -122,42 +127,51 @@ fun BottomSearchBarWrapper(
     val reorderableLazyGridState = rememberReorderableLazyGridState(
         lazyGridState,
     ) { from, to ->
-        tabsOrder.add(to.index, tabsOrder.removeAt(from.index))
+        dispatcher.immediate {
+            reorderTabs(from.index, to.index)
+        }
     }
 
+    val ime by keyboardAsState()
 
-    LaunchedEffect(backStackEntry) {
-        when (backStackEntry?.destination?.route) {
-            "${GeminiTab::class}" -> {
-                val route = backStackEntry?.toRoute<GeminiTab>()
-                searchText = route?.baseUrl ?: searchText
+    val activeTab by remember(backStackEntry) {
+        derivedStateOf {
+            runCatching {
+                backStackEntry?.toRoute<GeminiTab>()
             }
+                .getOrNull()
+        }
+    }
+
+    var barMode by rememberSaveable {
+        mutableStateOf(BarMode.NONE)
+    }
+
+    LaunchedEffect(ime) {
+        barMode = if (ime) {
+            BarMode.SEARCHING
+        } else {
+            BarMode.NONE
         }
     }
 
     BackHandler(
-        enabled = editing
-    ) {
-        editing = false
-    }
-
-    BackHandler(
-        enabled = searching
+        enabled = barMode == BarMode.SEARCHING
     ) {
         focusManager.clearFocus()
-        searching = false
+        barMode = BarMode.NONE
     }
 
     Column(modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
             AnimatedContent(
-                targetState = editing,
+                targetState = barMode,
                 modifier = Modifier.fillMaxSize(),
                 transitionSpec = {
                     fadeIn() togetherWith fadeOut()
                 }
-            ) { isEditing ->
-                if (isEditing) {
+            ) { mode ->
+                if (mode == BarMode.EDITING) {
                     val colors = CardDefaults.elevatedCardColors()
                     LazyVerticalGrid(
                         modifier = Modifier.fillMaxSize(),
@@ -165,14 +179,9 @@ fun BottomSearchBarWrapper(
                         columns = GridCells.Fixed(2),
                         contentPadding = WindowInsets.systemBars.asPaddingValues(),
                     ) {
-                        items(tabsOrder, key = { "${it.id}${it.baseUrl}" }) { tab ->
+                        items(state.tabs, key = { (tab) -> tab.tid }) { (tab, activePage) ->
                             val swipeToDismissState = rememberSwipeToDismissBoxState()
-                            val isTop = remember(backStackEntry) {
-                                runCatching {
-                                    backStackEntry?.toRoute<GeminiTab>() == tab
-                                }.getOrDefault(false)
-                            }
-
+                            val isTop = activeTab?.id == tab.tid
                             LaunchedEffect(swipeToDismissState.currentValue) {
                                 if (swipeToDismissState.currentValue in listOf(
                                         SwipeToDismissBoxValue.StartToEnd,
@@ -185,9 +194,20 @@ fun BottomSearchBarWrapper(
 
                             TabPreviewItem(
                                 reorderableLazyGridState = reorderableLazyGridState,
-                                tab = tab,
                                 swipeToDismissState = swipeToDismissState,
                                 isTop = isTop,
+                                onClose = {
+                                    dispatcher.dispatch {
+                                        deleteTab(tab.tid)
+                                    }
+                                },
+                                onSelected = {
+                                    dispatcher.immediate {
+                                        goToTab(tab)
+                                    }
+                                },
+                                activePage = activePage,
+                                itemKey = { tab.tid },
                                 colors = colors
                             )
                         }
@@ -197,7 +217,7 @@ fun BottomSearchBarWrapper(
                 }
             }
             androidx.compose.animation.AnimatedVisibility(
-                visible = editing,
+                visible = barMode == BarMode.EDITING,
                 modifier = Modifier.align(Alignment.BottomEnd)
             ) {
                 FloatingActionButton(
@@ -216,16 +236,33 @@ fun BottomSearchBarWrapper(
             }
         }
         BottomSearchBar(
-            searching = searching,
+            searching = barMode == BarMode.SEARCHING,
             modifier = Modifier.fillMaxWidth(),
             focusRequester = focusRequester,
             onFocusChanged = { state ->
-                searching = state.hasFocus
+                if (state.hasFocus) {
+                    barMode = BarMode.SEARCHING
+                }
             },
-            searchText = searchText,
-            onTextChanged = { searchText = it },
-            activeTabs = activeTabs,
-            toggleEditing = { editing = !editing }
+            searchText = state.query,
+            onTextChanged = {
+                dispatcher.immediate {
+                    onSearchChanged(it)
+                }
+            },
+            tabsCount = state.tabs.size,
+            onSearch = {
+                dispatcher.dispatch {
+                    search(it, tabId = activeTab?.id)
+                }
+            },
+            toggleEditing = {
+                barMode = if (barMode == BarMode.EDITING) {
+                    BarMode.NONE
+                } else {
+                    BarMode.EDITING
+                }
+            }
         )
     }
 }
@@ -233,15 +270,18 @@ fun BottomSearchBarWrapper(
 @Composable
 private fun LazyGridItemScope.TabPreviewItem(
     reorderableLazyGridState: ReorderableLazyGridState,
-    tab: GeminiTab,
+    activePage: Page?,
+    itemKey: () -> Any,
     swipeToDismissState: SwipeToDismissBoxState,
     isTop: Boolean,
+    onClose: () -> Unit,
+    onSelected: () -> Unit,
     colors: CardColors
 ) {
     val view = LocalView.current
     ReorderableItem(
         reorderableLazyGridState,
-        key = "${tab.id}${tab.baseUrl}"
+        key = itemKey
     ) {
         SwipeToDismissBox(
             swipeToDismissState,
@@ -255,6 +295,7 @@ private fun LazyGridItemScope.TabPreviewItem(
                         alpha =
                             EaseInOutSine.transform(swipeToDismissState.nonGoogleRetardProgress)
                     }
+                    .clickable { onSelected() }
                     .longPressDraggableHandle(
                         onDragStarted = {
                             ViewCompat.performHapticFeedback(
@@ -296,13 +337,13 @@ private fun LazyGridItemScope.TabPreviewItem(
                 ) {
                     FadingEndText(
                         modifier = Modifier.weight(1f),
-                        text = tab.baseUrl,
+                        text = activePage?.url.orEmpty().ifBlank { "gemini://" },
                         style = MaterialTheme.typography.labelMedium,
                         maxLines = 1,
                         softWrap = false,
                         fadeColor = colors.containerColor
                     )
-                    CloseIconButton({})
+                    CloseIconButton(onClose)
                 }
             }
         }
@@ -317,7 +358,8 @@ private fun BottomSearchBar(
     onFocusChanged: (state: FocusState) -> Unit,
     searchText: String,
     onTextChanged: (String) -> Unit,
-    activeTabs: List<GeminiTab>,
+    onSearch: (String) -> Unit,
+    tabsCount: Int,
     toggleEditing: () -> Unit
 ) {
     Surface(
@@ -351,6 +393,10 @@ private fun BottomSearchBar(
                         .focusRequester(focusRequester)
                         .onFocusChanged(onFocusChanged),
                     value = searchText,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Done
+                    ),
                     singleLine = true,
                     shape = MaterialTheme.shapes.small,
                     onValueChange = onTextChanged,
@@ -360,6 +406,11 @@ private fun BottomSearchBar(
                             style = MaterialTheme.typography.labelMedium
                         )
                     },
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            onSearch(searchText)
+                        }
+                    ),
                     colors = TextFieldDefaults.colors(
                         unfocusedContainerColor = MaterialTheme.colorScheme.inverseOnSurface,
                         focusedContainerColor = MaterialTheme.colorScheme.inverseOnSurface,
@@ -391,7 +442,7 @@ private fun BottomSearchBar(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                "${activeTabs.size}",
+                                "$tabsCount",
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold
                             )

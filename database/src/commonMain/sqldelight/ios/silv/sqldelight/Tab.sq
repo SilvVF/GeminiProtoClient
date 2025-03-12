@@ -1,8 +1,0 @@
-
-CREATE TABLE IF NOT EXISTS Tab(
-    _id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    link TEXT NOT NULL
-);
-
-insertTab:
-INSERT INTO Tab(_id, link) VALUES (NULL, :link);

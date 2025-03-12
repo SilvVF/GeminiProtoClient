@@ -126,7 +126,7 @@ data class ClientConfig(
         Dispatchers.IO +
                 SupervisorJob() +
                 CoroutineName("GeminiClientScope"),
-    val selector: SelectorManager = ActorSelectorManager(dispatcher),
+    val selector: SelectorManager = SelectorManager(dispatcher),
     val maxRedirects: Int = 5
 )
 
@@ -134,11 +134,7 @@ class GeminiClient(
     private val cache: GeminiCache,
     private val config: ClientConfig = ClientConfig()
 ) {
-    data class Conn(
-        val sock: Socket,
-        val writeChannel: ByteWriteChannel,
-        val readChannel: ByteReadChannel,
-    )
+    data class Conn(val sock: Socket)
 
     private val selector = config.selector
     private val conns = mutableMapOf<String, Conn>()
@@ -194,13 +190,7 @@ class GeminiClient(
                 }
             }
 
-        return Conn(
-            socket,
-            socket.openWriteChannel(true),
-            socket.openReadChannel()
-        ).also {
-            conns["${url.host}:$port"] = it
-        }
+        return Conn(socket)
     }
 
     private suspend fun fetchWithHostAndCert(
@@ -240,7 +230,7 @@ class GeminiClient(
 
             logcat { "Trying to connect to ${url.host} $port - $url" }
 
-            val conn = mutex.withLock {
+            mutex.withLock {
                 val key = "${url.host}:$port"
                 val open = conns[key]
                 // The server should have closed the connection after
@@ -261,47 +251,50 @@ class GeminiClient(
                     DON'T TIMEOUT
                  */
                 withTimeout(SOCKET_CLOSE_TIMEOUT) {
-                    open?.sock?.let { s ->
-                        s.close()
-                        s.awaitClosed()
-                    }
+                    open?.sock?.awaitClosed()
                 }
-                conns.remove(key)
-                openNewConnection(url, port, keystore)
+
+                openNewConnection(url, port, keystore).also {
+                    conns[key] = it
+                }
             }
+                .sock.use { conn ->
+                    val writeChannel = conn.openWriteChannel(true)
+                    val readChannel = conn.openReadChannel()
 
-            conn.writeChannel.writeString("${url}\r\n")
+                    writeChannel.writeString("${url}\r\n")
 
-            conn.readChannel.asSource().buffered().use { source ->
-                val header = getHeader(source).getOrThrow()
-                if (
-                    header.status == GeminiCode.StatusRedirectPermanent
-                    || header.status == GeminiCode.StatusRedirectTemporary
-                ) {
-                    return@suspendRunCatching handleRedirect(
-                        header, redirected, url, certPEM, keyPEM
-                    )
+                    readChannel.readRemaining().buffered().use { source ->
+                        val header = getHeader(source).getOrThrow()
+                        if (
+                            header.status == GeminiCode.StatusRedirectPermanent
+                            || header.status == GeminiCode.StatusRedirectTemporary
+                        ) {
+                            return@suspendRunCatching handleRedirect(
+                                header, redirected, url, certPEM, keyPEM
+                            )
+                        }
+
+                        if (header.status == GeminiCode.StatusSuccess) {
+                            cache.cacheResponse(
+                                url = url.toString(),
+                                header = "${header.status} ${header.meta}\r\n",
+                                // TODO(copy may not be needed)
+                                source = source.copy()
+                            )
+                        }
+                        // need to suck the shit up with cpy so
+                        // sock closing doesn't cancel channel when
+                        // the parser is parsing
+                        val body = source.copy()
+
+                        Response(
+                            status = header.status,
+                            meta = header.meta,
+                            body = body,
+                            cert = null
+                        )
                 }
-
-                if (header.status == GeminiCode.StatusSuccess) {
-                    cache.cacheResponse(
-                        url = url.toString(),
-                        header = "${header.status} ${header.meta}\r\n",
-                        // TODO(copy may not be needed)
-                        source = source.copy()
-                    )
-                }
-                // need to suck the shit up with cpy so
-                // sock closing doesn't cancel channel when
-                // the parser is parsing
-                val body = source.copy()
-
-                Response(
-                    status = header.status,
-                    meta = header.meta,
-                    body = body,
-                    cert = null
-                )
             }
         }
     }

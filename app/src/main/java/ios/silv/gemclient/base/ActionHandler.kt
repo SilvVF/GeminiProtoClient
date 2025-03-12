@@ -4,8 +4,8 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ios.silv.core_android.log.asLog
 import ios.silv.core_android.log.logcat
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 
@@ -31,11 +31,12 @@ abstract class ViewModelActionHandler<T> : ViewModel(), ActionDispatcher<T> {
     init {
         viewModelScope.launch {
             for (action in actions) {
-                try {
-                    action(handler)
-                } catch (e: Exception){
-                    if (e is CancellationException) throw e
-                    logcat { "$action had an error ${e.message}" }
+                launch {
+                    try {
+                        action(handler)
+                    } catch (e: Exception){
+                        logcat { "$action had an error ${e.message} ${e.asLog()}" }
+                    }
                 }
             }
         }

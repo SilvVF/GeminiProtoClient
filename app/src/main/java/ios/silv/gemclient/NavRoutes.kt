@@ -15,8 +15,7 @@ data object GeminiHome: Screen
 
 @Serializable
 data class GeminiTab(
-    val baseUrl: String,
-    val id: Long? = null
+    val id: Long
 ): Screen
 
 

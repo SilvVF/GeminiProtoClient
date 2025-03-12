@@ -43,7 +43,7 @@ class ComposeNavigator {
         topLevelDest
             .onSubscription { this@ComposeNavigator.topLevelNavController.value = navController }
             .onCompletion { this@ComposeNavigator.topLevelNavController.value = null }
-            .onEach { tld ->
+            .collect { tld ->
 
                 val route = navController.currentDestination?.route
                 val isCurrent = route == "${tld::class}"
@@ -61,19 +61,15 @@ class ComposeNavigator {
                     }
                 }
             }
-            .flowOn(Dispatchers.Main.immediate)
-            .collect()
     }
 
     suspend fun handleNavigationCommands(navController: NavController) {
         navCmds
             .onSubscription { this@ComposeNavigator.navControllerFlow.value = navController }
             .onCompletion { this@ComposeNavigator.navControllerFlow.value = null }
-            .onEach { cmd ->
+            .collect { cmd ->
                 logcat { "sending nav command $cmd" }
                 navController.cmd()
             }
-            .flowOn(Dispatchers.Main.immediate)
-            .collect()
     }
 }

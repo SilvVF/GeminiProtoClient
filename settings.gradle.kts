@@ -11,6 +11,8 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
@@ -24,4 +26,4 @@ rootProject.name = "GemClient"
 include(":app")
 include(":gemini")
 include(":core-android")
-include(":database")
+include(":database-android")

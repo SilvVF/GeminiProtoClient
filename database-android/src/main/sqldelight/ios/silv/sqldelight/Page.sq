@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS Page (
+    pid INTEGER PRIMARY KEY,
+    tab_id INTEGER NOT NULL,
+    url TEXT NOT NULL,
+    prev_page INTEGER,
+    FOREIGN KEY (prev_page) REFERENCES Page(pid) ON DELETE CASCADE,
+    FOREIGN KEY(tab_id) REFERENCES Tab(tid) ON DELETE CASCADE
+);
+
+insertPage:
+INSERT INTO Page(tab_id, url, prev_page)
+VALUES (:tabId, :url, :prevPage);
+
+selectPageById:
+SELECT * FROM Page WHERE pid = :id LIMIT 1;
+
+deletePageById:
+DELETE FROM Page WHERE pid = :id;
+
+lastInsertRowId:
+SELECT last_insert_rowid();

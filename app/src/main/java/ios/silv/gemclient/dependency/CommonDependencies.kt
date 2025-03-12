@@ -2,10 +2,11 @@ package ios.silv.gemclient.dependency
 
 import android.app.Application
 import androidx.lifecycle.LifecycleOwner
-import ios.silv.database.DatabaseHandler
-import ios.silv.database.DatabaseHandlerImpl
-import ios.silv.database.DriverFactory
-import ios.silv.database.createDatabase
+import ios.silv.database.Database
+import ios.silv.database_android.DatabaseHandler
+import ios.silv.database_android.DatabaseHandlerImpl
+import ios.silv.database_android.DriverFactory
+import ios.silv.database_android.dao.TabsRepo
 import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemini.GeminiCache
 import ios.silv.gemini.GeminiClient
@@ -28,14 +29,16 @@ public abstract class CommonDependencies {
 
     abstract val application: Application
 
-    val geminiCache by lazy { GeminiCache(application) }
+    private val geminiCache by lazy { GeminiCache(application) }
 
     val geminiClient by lazy { GeminiClient(geminiCache) }
 
     private val driver by lazy { DriverFactory(application).createDriver() }
-    private val database by lazy { createDatabase(driver) }
+    private val database by lazy { Database(driver) }
 
-    val databaseHandler by lazy<DatabaseHandler> { DatabaseHandlerImpl(database, driver) }
+    private val databaseHandler by lazy<DatabaseHandler> { DatabaseHandlerImpl(database, driver) }
+
+    val tabsRepo by lazy { TabsRepo(database, databaseHandler) }
 
     val navigator = ComposeNavigator()
 

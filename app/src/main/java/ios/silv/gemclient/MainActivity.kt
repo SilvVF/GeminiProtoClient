@@ -12,18 +12,23 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import ios.silv.gemclient.base.LocalNavigator
+import ios.silv.gemclient.base.createViewModel
 import ios.silv.gemclient.dependency.rememberDependency
+import ios.silv.gemclient.home.GeminiHomeViewModel
 import ios.silv.gemclient.tab.geminiPageDestination
 import ios.silv.gemclient.ui.LaunchedOnStartedEffect
 import ios.silv.gemclient.ui.components.BottomSearchBarWrapper
 import ios.silv.gemclient.ui.theme.GemClientTheme
-import ios.silv.home.geminiHomeDestination
+import ios.silv.gemclient.home.geminiHomeDestination
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -60,13 +65,16 @@ class MainActivity : ComponentActivity() {
                             startDestination = GeminiMain,
                         ) {
                             composable<GeminiMain> {
+
+                                val backStackEntry by mainNavController.currentBackStackEntryAsState()
+                                val bottomBarViewModel = createViewModel { GeminiBottomBarViewModel() }
+
+                                val bottomBarState by bottomBarViewModel.state.collectAsStateWithLifecycle()
+                                
                                 BottomSearchBarWrapper(
-                                    mainNavController,
-                                    listOf(
-                                        GeminiTab("gemini://gemini.circumlunar.space/docs/specification.gmi", 0),
-                                        GeminiTab("gemini://gemini.circumlunar.space/docs/specification.gmi", 1),
-                                        GeminiTab("gemini://gemini.circumlunar.space/docs/specification.gmi", 2)
-                                    )
+                                    dispatcher = bottomBarViewModel,
+                                    state = bottomBarState,
+                                    backStackEntry = backStackEntry
                                 ) {
                                     NavHost(
                                         navController = mainNavController,

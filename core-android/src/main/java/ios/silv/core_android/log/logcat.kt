@@ -8,7 +8,6 @@ import android.app.Application
 import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.util.Log
-import ios.silv.core_android.log.LogcatLogger.NoLog.asLog
 import kotlin.math.min
 
 private const val MAX_LOG_LENGTH = 4000
@@ -232,24 +231,6 @@ interface LogcatLogger {
             }
         }
     }
-
-
-    /**
-     * Utility to turn a [Throwable] into a loggable string.
-     *
-     * The implementation is based on Timber.getStackTraceString(). It's different
-     * from [android.util.Log.getStackTraceString] in the following ways:
-     * - No silent swallowing of UnknownHostException.
-     * - The buffer size is 256 bytes instead of the default 16 bytes.
-     */
-    fun Throwable.asLog(): String {
-        val stringWriter = StringWriter(256)
-        val printWriter = PrintWriter(stringWriter, false)
-        printStackTrace(printWriter)
-        printWriter.flush()
-        return stringWriter.toString()
-    }
-
     /**
      * A [LogcatLogger] that always logs and delegates to [println] concatenating
      * the tag and message, separated by a space. Alternative to [AndroidLogcatLogger]
@@ -272,6 +253,23 @@ interface LogcatLogger {
         ) = error("Should never receive any log")
     }
 }
+
+/**
+ * Utility to turn a [Throwable] into a loggable string.
+ *
+ * The implementation is based on Timber.getStackTraceString(). It's different
+ * from [android.util.Log.getStackTraceString] in the following ways:
+ * - No silent swallowing of UnknownHostException.
+ * - The buffer size is 256 bytes instead of the default 16 bytes.
+ */
+fun Throwable.asLog(): String {
+    val stringWriter = StringWriter(256)
+    val printWriter = PrintWriter(stringWriter, false)
+    printStackTrace(printWriter)
+    printWriter.flush()
+    return stringWriter.toString()
+}
+
 
 @PublishedApi
 internal fun Any.outerClassSimpleNameInternalOnlyDoNotUseKThxBye(): String {

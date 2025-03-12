@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +45,8 @@ import ios.silv.gemclient.base.createViewModel
 import ios.silv.gemclient.ui.components.AutoScrollIndicator
 import ios.silv.gemclient.ui.sampleScrollingState
 import ios.silv.gemini.ContentNode
+import ios.silv.sqldelight.Page
+import ios.silv.sqldelight.Tab
 import kotlinx.coroutines.launch
 
 fun NavGraphBuilder.geminiPageDestination() {
@@ -53,11 +56,9 @@ fun NavGraphBuilder.geminiPageDestination() {
         }
 
         val state by viewModel.tabState.collectAsStateWithLifecycle()
-        val stack by  viewModel.stackAsState.collectAsStateWithLifecycle()
-        BackHandler(
-           stack.size > 1
-        ) {
-            viewModel.immediate {
+
+        BackHandler {
+            viewModel.dispatch {
                 goBack()
             }
         }
@@ -83,8 +84,8 @@ private fun PreviewDoneGeminiPageContent() {
 
     GeminiPageContent(
         dispatcher = dispatcher,
-        state = TabState.Done(
-            url = "gemini://testloadingstate.urmom",
+        state = TabState.Loaded.Done(
+            page = Page(-1, -1, "gemini://testloadingstate.urmom", -1),
             nodes = remember {
                 listOf(
                     UiNode(ContentNode.Line.Text("Text line")),
@@ -119,7 +120,7 @@ private fun PreviewLoadingGeminiPageContent() {
 
     GeminiPageContent(
         dispatcher = dispatcher,
-        state = TabState.Loading("gemini://testloadingstate.urmom")
+        state = TabState.Loaded.Loading(Page(-1, -1, "gemini://testloadingstate.urmom", -1))
     )
 }
 
@@ -128,11 +129,8 @@ private fun GeminiPageContent(
     dispatcher: ActionDispatcher<GeminiTabViewModelAction>,
     state: TabState,
 ) {
-    val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-
     PullToRefreshBox(
-        isRefreshing = state is TabState.Loading,
+        isRefreshing = state is TabState.Idle,
         onRefresh = {
             dispatcher.dispatch {
                 refresh()
@@ -141,74 +139,102 @@ private fun GeminiPageContent(
         modifier = Modifier.fillMaxSize(),
     ) {
         when (state) {
-            is TabState.Loading -> {}
-            is TabState.Input -> {
-                var input by rememberSaveable { mutableStateOf("") }
+            is TabState.Loaded.Loading -> {
+                Box(Modifier.fillMaxSize()) {
+                    CircularProgressIndicator(Modifier.align(Alignment.Center))
+                }
+            }
 
-                Column(Modifier.fillMaxSize()) {
-                    OutlinedTextField(
-                        value = input,
-                        onValueChange = { input = it },
-                        trailingIcon = {
-                            IconButton(
-                                onClick = {
-                                    dispatcher.dispatch {
-                                        submitInput(input)
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    Icons.Default.Done,
-                                    contentDescription = null
-                                )
-                            }
+            is TabState.Loaded.Input -> {
+                TabStateInputContent(dispatcher)
+            }
+
+            is TabState.Loaded.Done -> {
+                TabStateDoneContent(dispatcher, state)
+            }
+
+            else -> Box(Modifier.fillMaxSize()) {
+                Text(state.toString())
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabStateInputContent(
+    dispatcher: ActionDispatcher<GeminiTabViewModelAction>,
+) {
+    var input by rememberSaveable { mutableStateOf("") }
+
+    Column(Modifier.fillMaxSize()) {
+        OutlinedTextField(
+            value = input,
+            onValueChange = { input = it },
+            trailingIcon = {
+                IconButton(
+                    onClick = {
+                        dispatcher.dispatch {
+                            submitInput(input)
                         }
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.Done,
+                        contentDescription = null
                     )
                 }
             }
-            is TabState.Done -> {
-                Box(Modifier.fillMaxSize()) {
+        )
+    }
+}
 
-                    val scrollToTopVisible by listState.sampleScrollingState()
+@Composable
+private fun TabStateDoneContent(
+    dispatcher: ActionDispatcher<GeminiTabViewModelAction>,
+    state: TabState.Loaded.Done
+) {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
-                    LazyColumn(
-                        Modifier.fillMaxSize(),
-                        state = listState
-                    ) {
-                        for ((node, key, contentType) in state.nodes) {
-                            if (node is ContentNode.Line.Heading) {
-                                stickyHeader(key = key, contentType = contentType) {
-                                    Surface(
-                                        Modifier.fillMaxWidth(),
-                                        color = MaterialTheme.colorScheme.surface.copy(
-                                            alpha = 0.78f
-                                        )
-                                    ) {
-                                        node.RenderHeading()
-                                    }
-                                }
-                            } else {
-                                item(key = key, contentType = contentType) {
-                                    node.Render(dispatcher)
-                                }
-                            }
+    Box(Modifier.fillMaxSize()) {
+
+        val scrollToTopVisible by listState.sampleScrollingState()
+
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            state = listState
+        ) {
+            for ((node, key, contentType) in state.nodes) {
+                if (node is ContentNode.Line.Heading) {
+                    stickyHeader(key = key, contentType = contentType) {
+                        Surface(
+                            Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.surface.copy(
+                                alpha = 0.78f
+                            )
+                        ) {
+                            node.RenderHeading()
                         }
                     }
-
-                    AutoScrollIndicator(
-                        visible = scrollToTopVisible,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .offset { IntOffset(0, -12) },
-                        onClick = {
-                            scope.launch {
-                                listState.animateScrollToItem(0)
-                            }
-                        }
-                    )
+                } else {
+                    item(key = key, contentType = contentType) {
+                        node.Render(dispatcher)
+                    }
                 }
             }
         }
+
+        AutoScrollIndicator(
+            visible = scrollToTopVisible,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .offset { IntOffset(0, -12) },
+            onClick = {
+                scope.launch {
+                    listState.animateScrollToItem(0)
+                }
+            }
+        )
     }
 }
 

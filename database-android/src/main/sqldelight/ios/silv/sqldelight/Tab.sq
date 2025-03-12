@@ -1,0 +1,37 @@
+CREATE TABLE IF NOT EXISTS Tab(
+    tid INTEGER PRIMARY KEY,
+    active_page_id INTEGER
+);
+
+insertTab:
+INSERT INTO Tab(active_page_id)
+VALUES (:active_page);
+
+lastInsertRowId:
+SELECT last_insert_rowid();
+
+deleteById:
+DELETE FROM Tab WHERE tid = :id;
+
+selectTabById:
+SELECT * FROM Tab WHERE tid = :id LIMIT 1;
+
+updateTabActivePage:
+UPDATE Tab SET
+    active_page_id = :activePageId
+WHERE Tab.tid = :id;
+
+selectTabsWithActivePage:
+SELECT T.tid, T.active_page_id, P.pid, P.tab_id, P.url, P.prev_page
+FROM Tab T
+LEFT JOIN Page P ON (
+    P.tab_id = T.tid AND P.pid = T.active_page_id
+);
+
+selectTabWithPagesById:
+SELECT T.tid, T.active_page_id, P.pid, P.tab_id, P.url, P.prev_page
+FROM Tab T
+LEFT JOIN Page P ON (
+    P.tab_id = T.tid
+)
+WHERE T.tid = :id;
