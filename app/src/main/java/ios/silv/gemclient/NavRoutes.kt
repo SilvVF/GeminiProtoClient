@@ -1,7 +1,7 @@
 package ios.silv.gemclient
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.Transient
+
 
 sealed interface TopLevelDest
 

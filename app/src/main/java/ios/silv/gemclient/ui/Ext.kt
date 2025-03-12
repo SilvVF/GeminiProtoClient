@@ -9,6 +9,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -39,6 +40,34 @@ fun LazyListState.sampleScrollingState(sample: Duration = 800.milliseconds): Sta
             }
     }
 }
+
+fun Modifier.conditional(condition: Boolean, other: Modifier): Modifier =
+    if (condition) {
+        this.then(other)
+    } else {
+        this
+    }
+
+fun Modifier.conditional(condition: Boolean, ifFalse: Modifier, ifTrue: Modifier): Modifier =
+    if (condition) {
+        this.then(ifTrue)
+    } else {
+        this.then(ifFalse)
+    }
+
+fun Modifier.conditional(condition: Boolean, other: Modifier.() -> Unit): Modifier =
+    if (condition) {
+        this.then(Modifier.apply(other))
+    } else {
+        this
+    }
+
+fun Modifier.conditional(condition: () -> Boolean, other:  Modifier.() -> Unit): Modifier =
+    if (condition()) {
+        this.then(Modifier.apply(other))
+    } else {
+        this
+    }
 
 @Composable
 fun LaunchedOnStartedEffect(

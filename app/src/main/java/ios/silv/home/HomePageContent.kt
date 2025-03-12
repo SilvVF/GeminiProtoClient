@@ -1,6 +1,9 @@
 package ios.silv.home
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -23,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
@@ -70,7 +74,7 @@ private fun GeminiHomeContent(
     dispatcher: ActionDispatcher<GeminiHomeViewModelAction>,
     state: HomeViewModelState,
 ) {
-    val topBarScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val topBarScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     Scaffold(
         containerColor = animateColorAsState(
             if (state.incognito) {
@@ -112,6 +116,7 @@ private fun GeminiHomeContent(
             Modifier
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
+                .fillMaxSize()
         ) {
 
         }

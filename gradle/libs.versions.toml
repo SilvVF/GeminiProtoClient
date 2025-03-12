@@ -17,12 +17,15 @@ sqldelight = "2.0.2"
 
 kotlinxSerializationJson = "1.8.0"
 
+ksp = "2.0.21-1.0.28"
+
 composeUi = "1.7.8"
 compose = "1.7.8"
 
 composeNav = "2.8.8"
 runner = "1.5.2"
 core = "1.5.0"
+symbolProcessingApi = "2.0.21-1.0.28"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -62,6 +65,7 @@ kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", versio
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
 androidx-runner = { group = "androidx.test", name = "runner", version.ref = "runner" }
 androidx-core = { group = "androidx.test", name = "core", version.ref = "core" }
+symbol-processing-api = { module = "com.google.devtools.ksp:symbol-processing-api", version.ref = "ksp" }
 
 [plugins]
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
@@ -73,6 +77,7 @@ jetbrains-kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin"
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 
 [bundles]
 compose-ui = ["compose-ui", "compose-ui-tooling", "compose-ui-util", "compose-ui-text", "compose-ui-unit", "compose-ui-geometry", "compose-navigation"]
