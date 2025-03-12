@@ -63,15 +63,15 @@ class MainActivity : ComponentActivity() {
                                 BottomSearchBarWrapper(
                                     mainNavController,
                                     listOf(
-                                        GeminiTab("gemini://gemini.circumlunar.space/docs/specification.gmi"),
-                                        GeminiTab("gemini://gemini.circumlunar.space/docs/specification.gmi"),
-                                        GeminiTab("gemini://gemini.circumlunar.space/docs/specification.gmi")
+                                        GeminiTab("gemini://gemini.circumlunar.space/docs/specification.gmi", 0),
+                                        GeminiTab("gemini://gemini.circumlunar.space/docs/specification.gmi", 1),
+                                        GeminiTab("gemini://gemini.circumlunar.space/docs/specification.gmi", 2)
                                     )
                                 ) {
                                     NavHost(
                                         navController = mainNavController,
                                         startDestination = GeminiHome,
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.fillMaxSize()
                                     ) {
                                         geminiHomeDestination()
 

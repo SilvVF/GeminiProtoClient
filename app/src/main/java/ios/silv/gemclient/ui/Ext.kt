@@ -1,6 +1,9 @@
 package ios.silv.gemclient.ui
 
+import androidx.annotation.FloatRange
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.material3.SwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -41,6 +44,17 @@ fun LazyListState.sampleScrollingState(sample: Duration = 800.milliseconds): Sta
     }
 }
 
+val SwipeToDismissBoxState.nonGoogleRetardProgress: Float
+    @FloatRange(0.0, 1.0) get() = if (
+        dismissDirection != SwipeToDismissBoxValue.Settled &&
+        (progress != 1f || targetValue != SwipeToDismissBoxValue.Settled)
+    ) {
+        1f - progress
+    } else {
+        1f
+    }
+
+
 fun Modifier.conditional(condition: Boolean, other: Modifier): Modifier =
     if (condition) {
         this.then(other)
@@ -62,7 +76,7 @@ fun Modifier.conditional(condition: Boolean, other: Modifier.() -> Unit): Modifi
         this
     }
 
-fun Modifier.conditional(condition: () -> Boolean, other:  Modifier.() -> Unit): Modifier =
+fun Modifier.conditional(condition: () -> Boolean, other: Modifier.() -> Unit): Modifier =
     if (condition()) {
         this.then(Modifier.apply(other))
     } else {
