@@ -10,24 +10,27 @@ import ios.silv.gemclient.dependency.DependencyAccessor
 import ios.silv.gemclient.dependency.commonDeps
 import ios.silv.sqldelight.Page
 import ios.silv.sqldelight.Tab
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
+import kotlin.math.log
 
 interface GeminiBottomBarAction {
     fun onSearchChanged(query: String)
     fun reorderTabs(from: Int, to: Int)
     fun goToTab(tab: Tab)
     suspend fun deleteTab(id: Long)
-    suspend fun search(query: String, tabId: Long? = null)
+    suspend fun createNewTab(query: String?)
+    suspend fun createNewPage(query: String, tabId: Long)
 }
 
 data class BottomBarState(
     val tabs: List<Pair<Tab, Page?>> = emptyList(),
-    val query: String = "",
+    val query: String = ""
 )
 
 class GeminiBottomBarViewModel @OptIn(DependencyAccessor::class) constructor(
@@ -44,7 +47,9 @@ class GeminiBottomBarViewModel @OptIn(DependencyAccessor::class) constructor(
         tabsRepo
             .observeTabsWithActivePage()
             .onEach { items ->
+                logcat { "new items = $items" }
                 _state.update { state ->
+                    logcat { "prev state = $state" }
                     state.copy(
                         tabs = updateListPreserveOrder(state.tabs, items)
                     )
@@ -60,14 +65,16 @@ class GeminiBottomBarViewModel @OptIn(DependencyAccessor::class) constructor(
     ): List<Pair<Tab, Page?>> {
 
         val newValues = new.groupBy { (tab) -> tab.tid }
+        val updated = prev.mapNotNull { (tab) -> newValues[tab.tid]?.firstOrNull() }
 
-        val updated = prev.filter { (tab) -> newValues.containsKey(tab.tid) }
-        val updatedKeys = updated.map { (tab) -> tab.tid }.toSet()
+        val updatedKeys = updated.map{ (tab) -> tab.tid }.toSet()
         val added = new.filter { (tab) -> tab.tid !in updatedKeys }
 
         return buildList {
             addAll(updated)
             addAll(added)
+        }.also {
+            logcat { "preserveOrder = $it" }
         }
     }
 
@@ -83,12 +90,7 @@ class GeminiBottomBarViewModel @OptIn(DependencyAccessor::class) constructor(
         _state.update { state ->
             state.copy(
                 tabs = state.tabs.toMutableList().apply {
-                    if (
-                        to in 0..state.tabs.lastIndex &&
-                        from in 0..state.tabs.lastIndex
-                    ) {
-                        add(to, removeAt(from))
-                    }
+                    add(to, removeAt(from))
                 }
             )
         }
@@ -104,12 +106,15 @@ class GeminiBottomBarViewModel @OptIn(DependencyAccessor::class) constructor(
         tabsRepo.deleteTab(id)
     }
 
-    override suspend fun search(query: String, tabId: Long?) {
-        logcat { "searching $query $tabId" }
+    override suspend fun createNewTab(query: String?) {
         val tab = tabsRepo.insertTab(query)
 
         navigator.navCmds.emit {
             navigate(GeminiTab(tab.tid))
         }
+    }
+
+    override suspend fun createNewPage(query: String, tabId: Long) {
+        tabsRepo.insertPage(tabId, query)
     }
 }

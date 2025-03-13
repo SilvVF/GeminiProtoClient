@@ -113,9 +113,11 @@ class GeminiCache(private val context: Context) {
             }
 
             source.use { src ->
-                file.outputStream().asSink().buffered().use { dest ->
-                    dest.writeString(header.removeSuffix("\r\n") + "\r\n")
-                    src.transferTo(dest)
+                file.outputStream().use { fos ->
+                    fos.asSink().buffered().use { sink ->
+                        sink.writeString(header.removeSuffix("\r\n") + "\r\n")
+                        src.transferTo(sink)
+                    }
                 }
             }
 

@@ -38,7 +38,7 @@ public abstract class CommonDependencies {
 
     private val databaseHandler by lazy<DatabaseHandler> { DatabaseHandlerImpl(database, driver) }
 
-    val tabsRepo by lazy { TabsRepo(database, databaseHandler) }
+    val tabsRepo by lazy { TabsRepo(databaseHandler) }
 
     val navigator = ComposeNavigator()
 

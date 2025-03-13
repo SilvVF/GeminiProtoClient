@@ -12,9 +12,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 class TabsRepo(
-    private val database: Database,
     private val databaseHandler: DatabaseHandler,
-    private val queryDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
 
     @Throws(IllegalStateException::class, NullPointerException::class)
@@ -33,9 +31,9 @@ class TabsRepo(
         databaseHandler.awaitOneExecutable(true) {
             val tab = tabQueries.selectTabById(tabId).executeAsOne()
 
-            pageQueries.insertPage(tab.tid, url, tab.active_page_id)
+            pageQueries.insertPage(tabId = tab.tid, url, tab.active_page_id)
             val pageId = pageQueries.lastInsertRowId().executeAsOne()
-            tabQueries.updateTabActivePage(pageId, tabId)
+            tabQueries.updateTabActivePage(activePageId = pageId, tabId)
             pageQueries.selectPageById(pageId)
         }
 
@@ -46,10 +44,28 @@ class TabsRepo(
     }
 
     @Throws(IllegalStateException::class, NullPointerException::class)
-    suspend fun deletePage(pageId: Long) = databaseHandler.await(true) {
-        val page = pageQueries.selectPageById(pageId).executeAsOne()
-        pageQueries.deletePageById(page.pid)
-        tabQueries.updateTabActivePage(page.prev_page, page.tab_id)
+    suspend fun deletePage(pageId: Long): Page? = databaseHandler.await(true) {
+        val page = pageQueries.selectPageById(pageId).executeAsOneOrNull()
+        if (page != null) {
+            pageQueries.deletePageById(page.pid)
+            tabQueries.updateTabActivePage(page.prev_page, page.tab_id)
+        }
+        page
+    }
+
+    suspend fun popActivePageByTabId(tid: Long): Boolean {
+        return databaseHandler.await(true) {
+            val activePageId = tabQueries
+                .selectTabById(tid)
+                .executeAsOneOrNull()
+                ?.active_page_id
+
+            val deletedPage = activePageId?.let {
+                deletePage(activePageId)
+            }
+
+            deletedPage != null
+        }
     }
 
     suspend fun selectTabById(id: Long): Tab? {

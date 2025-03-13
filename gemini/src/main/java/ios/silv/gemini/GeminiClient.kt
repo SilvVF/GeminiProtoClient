@@ -19,8 +19,11 @@ import io.ktor.utils.io.asSource
 import io.ktor.utils.io.cancel
 import io.ktor.utils.io.close
 import io.ktor.utils.io.core.copy
+import io.ktor.utils.io.core.readAvailable
+import io.ktor.utils.io.core.remaining
 import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import io.ktor.utils.io.read
+import io.ktor.utils.io.readAvailable
 import io.ktor.utils.io.readRemaining
 import io.ktor.utils.io.writeString
 import ios.silv.core_android.log.LogPriority.ERROR
@@ -37,9 +40,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.io.Buffer
 import kotlinx.io.Source
 import kotlinx.io.asSource
 import kotlinx.io.buffered
+import kotlinx.io.readByteArray
 import kotlinx.io.writeString
 import java.io.File
 import java.security.KeyStore
@@ -152,31 +157,62 @@ class GeminiClient(
 
     private suspend fun readResponseFromCache(file: File, redirected: Int = 0): Result<Response> {
         return suspendRunCatching {
-            file.inputStream().asSource().buffered().use { source ->
+            val source = file.inputStream().asSource().buffered()
 
-                val header = getHeader(source).getOrThrow()
+            val header = getHeader(source).getOrThrow()
 
-                if (header.status == GeminiCode.StatusRedirectPermanent) {
-                    return@suspendRunCatching fetchWithHostAndCert(
-                        Url(header.meta),
-                        byteArrayOf(),
-                        byteArrayOf(),
-                        (redirected + 1)
-                    )
-                        .getOrThrow()
-                }
+            if (header.status == GeminiCode.StatusRedirectPermanent) {
 
-                Response(
-                    status = header.status,
-                    meta = header.meta,
-                    body = source.copy(),
-                    cert = null
+                source.close()
+
+                return@suspendRunCatching fetchWithHostAndCert(
+                    Url(header.meta),
+                    byteArrayOf(),
+                    byteArrayOf(),
+                    (redirected + 1)
                 )
+                    .getOrThrow()
             }
+
+            if (source.remaining <= 0L) {
+                source.close()
+                error("empty buffer")
+            }
+
+            Response(
+                status = header.status,
+                meta = header.meta,
+                body = source,
+                cert = null
+            )
         }
     }
 
     private suspend fun openNewConnection(url: Url, port: Int, keystore: KeyStore?): Conn {
+        val key = "${url.host}:$port"
+        val open = conns[key]
+        // The server should have closed the connection after
+        // sending response if not try and close (no-op if closed)
+        /*
+            ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⢄⠀⣔⣄⡀⠀⣠⣄⠀⠀⠀
+            ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡼⠿⠟⢻⣿⣯⣻⣩⢞⣭⣿⣿⣶⢤⡀
+            ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠴⠚⠁⢀⣠⣾⠽⠟⠻⠿⣿⡿⠋⠡⠀⠉⠢⡑
+            ⠀⠀⠀⠀⠀⠀⠀⣀⠤⠒⠉⠀⠀⠀⠀⢻⠟⠁⠤⠒⠁⠀⢸⡄⠀⠀⠀⠀⠀⢹
+            ⠀⠀⠀⣀⡤⠖⠉⠀⠀⠀⠀⠀⠀⠀⠀⡏⠀⠀⠀⠀⠀⠀⢀⡷⡄⠀⠀⠀⢀⣼
+            ⠀⡠⠚⠁⠀⠀⠀⠀⠀⠀⠀⠀⠸⣦⡀⠳⣄⡀⠀⠀⣀⡞⠋⠋⠻⣦⣤⠴⠚⠉
+            ⡾⠁⢀⡖⢁⡤⠔⠒⠒⠒⠒⠦⢤⣀⣉⣓⠚⠛⠋⠉⠀⡇⠀⠀⠀⣟⢀⣀⠤⢾
+            ⣇⠀⢸⢠⡏⠀⠀⠛⠓⠒⠶⠶⠤⢤⣄⣉⣉⣉⠛⠛⣿⠁⠀⠀⠀⢸⣁⣀⡤⠋
+            ⣿⢦⡀⠀⠙⠒⠒⠒⠒⠒⠲⠦⢤⣤⣀⣀⣉⣉⣉⣉⡿⠀⠀⠀⠀⠸⣏⣩⢷⠿
+            ⠛⢦⣵⣤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⢉⡇⠀⠀⠀⠀⠀⢻⡷⠁⠀
+            ⠀⠀⠈⠉⠛⠳⠶⣤⣤⣤⣤⣤⣤⣀⣀⣀⣠⣶⣊⡿⠀⠀⠀⠀⠀⠀⠀⢣⡤⠤
+            ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⣉⣉⣉⠉⠀⠀⢻⡄⠀⠀⠀⠀⠀⠀⠀⣸⠃⠀
+            DON'T TIMEOUT
+         */
+        withTimeout(SOCKET_CLOSE_TIMEOUT) {
+            open?.sock?.close()
+            open?.sock?.awaitClosed()
+        }
+
         val socket = aSocket(selector).tcp().connect(
             url.host,
             port,
@@ -190,7 +226,9 @@ class GeminiClient(
                 }
             }
 
-        return Conn(socket)
+        return Conn(socket).also {
+            conns[key] = it
+        }
     }
 
     private suspend fun fetchWithHostAndCert(
@@ -231,32 +269,7 @@ class GeminiClient(
             logcat { "Trying to connect to ${url.host} $port - $url" }
 
             mutex.withLock {
-                val key = "${url.host}:$port"
-                val open = conns[key]
-                // The server should have closed the connection after
-                // sending response if not try and close (no-op if closed)
-                /*
-                    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⢄⠀⣔⣄⡀⠀⣠⣄⠀⠀⠀
-                    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡼⠿⠟⢻⣿⣯⣻⣩⢞⣭⣿⣿⣶⢤⡀
-                    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠴⠚⠁⢀⣠⣾⠽⠟⠻⠿⣿⡿⠋⠡⠀⠉⠢⡑
-                    ⠀⠀⠀⠀⠀⠀⠀⣀⠤⠒⠉⠀⠀⠀⠀⢻⠟⠁⠤⠒⠁⠀⢸⡄⠀⠀⠀⠀⠀⢹
-                    ⠀⠀⠀⣀⡤⠖⠉⠀⠀⠀⠀⠀⠀⠀⠀⡏⠀⠀⠀⠀⠀⠀⢀⡷⡄⠀⠀⠀⢀⣼
-                    ⠀⡠⠚⠁⠀⠀⠀⠀⠀⠀⠀⠀⠸⣦⡀⠳⣄⡀⠀⠀⣀⡞⠋⠋⠻⣦⣤⠴⠚⠉
-                    ⡾⠁⢀⡖⢁⡤⠔⠒⠒⠒⠒⠦⢤⣀⣉⣓⠚⠛⠋⠉⠀⡇⠀⠀⠀⣟⢀⣀⠤⢾
-                    ⣇⠀⢸⢠⡏⠀⠀⠛⠓⠒⠶⠶⠤⢤⣄⣉⣉⣉⠛⠛⣿⠁⠀⠀⠀⢸⣁⣀⡤⠋
-                    ⣿⢦⡀⠀⠙⠒⠒⠒⠒⠒⠲⠦⢤⣤⣀⣀⣉⣉⣉⣉⡿⠀⠀⠀⠀⠸⣏⣩⢷⠿
-                    ⠛⢦⣵⣤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⢉⡇⠀⠀⠀⠀⠀⢻⡷⠁⠀
-                    ⠀⠀⠈⠉⠛⠳⠶⣤⣤⣤⣤⣤⣤⣀⣀⣀⣠⣶⣊⡿⠀⠀⠀⠀⠀⠀⠀⢣⡤⠤
-                    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⣉⣉⣉⠉⠀⠀⢻⡄⠀⠀⠀⠀⠀⠀⠀⣸⠃⠀
-                    DON'T TIMEOUT
-                 */
-                withTimeout(SOCKET_CLOSE_TIMEOUT) {
-                    open?.sock?.awaitClosed()
-                }
-
-                openNewConnection(url, port, keystore).also {
-                    conns[key] = it
-                }
+                openNewConnection(url, port, keystore)
             }
                 .sock.use { conn ->
                     val writeChannel = conn.openWriteChannel(true)
@@ -264,38 +277,38 @@ class GeminiClient(
 
                     writeChannel.writeString("${url}\r\n")
 
-                    readChannel.readRemaining().buffered().use { source ->
-                        val header = getHeader(source).getOrThrow()
-                        if (
-                            header.status == GeminiCode.StatusRedirectPermanent
-                            || header.status == GeminiCode.StatusRedirectTemporary
-                        ) {
-                            return@suspendRunCatching handleRedirect(
-                                header, redirected, url, certPEM, keyPEM
-                            )
-                        }
+                    val buffer = Buffer()
 
-                        if (header.status == GeminiCode.StatusSuccess) {
-                            cache.cacheResponse(
-                                url = url.toString(),
-                                header = "${header.status} ${header.meta}\r\n",
-                                // TODO(copy may not be needed)
-                                source = source.copy()
-                            )
-                        }
-                        // need to suck the shit up with cpy so
-                        // sock closing doesn't cancel channel when
-                        // the parser is parsing
-                        val body = source.copy()
+                    readChannel.readRemaining().use {
+                        it.readAvailable(buffer)
+                    }
+                    val header = getHeader(buffer).getOrThrow()
 
-                        Response(
-                            status = header.status,
-                            meta = header.meta,
-                            body = body,
-                            cert = null
+                    if (
+                        header.status == GeminiCode.StatusRedirectPermanent
+                        || header.status == GeminiCode.StatusRedirectTemporary
+                    ) {
+                        return@suspendRunCatching handleRedirect(
+                            header, redirected, url, certPEM, keyPEM
                         )
+                    }
+
+                    if (header.status == GeminiCode.StatusSuccess) {
+                        cache.cacheResponse(
+                            url = url.toString(),
+                            header = "${header.status} ${header.meta}\r\n",
+                            // TODO(copy may not be needed)
+                            source = buffer.copy()
+                        )
+                    }
+
+                    Response(
+                        status = header.status,
+                        meta = header.meta,
+                        body = buffer.copy(),
+                        cert = null
+                    )
                 }
-            }
         }
     }
 

@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS Page (
 );
 
 insertPage:
-INSERT INTO Page(tab_id, url, prev_page)
-VALUES (:tabId, :url, :prevPage);
+INSERT INTO Page(pid, tab_id, url, prev_page)
+VALUES (NULL, :tabId, :url, :prevPage);
 
 selectPageById:
 SELECT * FROM Page WHERE pid = :id LIMIT 1;

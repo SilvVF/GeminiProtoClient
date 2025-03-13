@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -87,6 +88,7 @@ import androidx.core.view.HapticFeedbackConstantsCompat
 import androidx.core.view.ViewCompat
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.toRoute
+import ios.silv.core_android.log.logcat
 import ios.silv.gemclient.BottomBarState
 import ios.silv.gemclient.GeminiBottomBarAction
 import ios.silv.gemclient.GeminiTab
@@ -94,9 +96,11 @@ import ios.silv.gemclient.base.ActionDispatcher
 import ios.silv.gemclient.ui.conditional
 import ios.silv.gemclient.ui.nonGoogleRetardProgress
 import ios.silv.sqldelight.Page
+import ios.silv.sqldelight.Tab
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyGridState
+import java.util.UUID
 
 private enum class BarMode {
     EDITING,
@@ -127,6 +131,7 @@ fun BottomSearchBarWrapper(
     val reorderableLazyGridState = rememberReorderableLazyGridState(
         lazyGridState,
     ) { from, to ->
+        logcat { "reordering $from, $to" }
         dispatcher.immediate {
             reorderTabs(from.index, to.index)
         }
@@ -179,18 +184,27 @@ fun BottomSearchBarWrapper(
                         columns = GridCells.Fixed(2),
                         contentPadding = WindowInsets.systemBars.asPaddingValues(),
                     ) {
-                        items(state.tabs, key = { (tab) -> tab.tid }) { (tab, activePage) ->
-                            val swipeToDismissState = rememberSwipeToDismissBoxState()
-                            val isTop = activeTab?.id == tab.tid
-                            LaunchedEffect(swipeToDismissState.currentValue) {
-                                if (swipeToDismissState.currentValue in listOf(
-                                        SwipeToDismissBoxValue.StartToEnd,
-                                        SwipeToDismissBoxValue.EndToStart
-                                    )
-                                ) {
-                                    swipeToDismissState.reset()
+                        items(state.tabs, { it.first.tid }) { (tab, activePage) ->
+                            val swipeToDismissState = rememberSwipeToDismissBoxState(
+                                confirmValueChange = {
+                                    when(it) {
+                                        SwipeToDismissBoxValue.StartToEnd -> {
+                                            dispatcher.dispatch {
+                                                deleteTab(tab.tid)
+                                            }
+                                            true
+                                        }
+                                        SwipeToDismissBoxValue.EndToStart -> {
+                                            dispatcher.dispatch {
+                                                deleteTab(tab.tid)
+                                            }
+                                            true
+                                        }
+                                        SwipeToDismissBoxValue.Settled -> false
+                                    }
                                 }
-                            }
+                            )
+                            val isTop = activeTab?.id == tab.tid
 
                             TabPreviewItem(
                                 reorderableLazyGridState = reorderableLazyGridState,
@@ -206,8 +220,8 @@ fun BottomSearchBarWrapper(
                                         goToTab(tab)
                                     }
                                 },
+                                tab = tab,
                                 activePage = activePage,
-                                itemKey = { tab.tid },
                                 colors = colors
                             )
                         }
@@ -221,7 +235,11 @@ fun BottomSearchBarWrapper(
                 modifier = Modifier.align(Alignment.BottomEnd)
             ) {
                 FloatingActionButton(
-                    onClick = {},
+                    onClick = {
+                        dispatcher.dispatch {
+                            createNewTab(null)
+                        }
+                    },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(12.dp),
@@ -253,7 +271,12 @@ fun BottomSearchBarWrapper(
             tabsCount = state.tabs.size,
             onSearch = {
                 dispatcher.dispatch {
-                    search(it, tabId = activeTab?.id)
+                    val tab = activeTab
+                    if (tab != null) {
+                        createNewPage(state.query, tab.id)
+                    } else {
+                        createNewTab(state.query.takeIf { it.isNotBlank() })
+                    }
                 }
             },
             toggleEditing = {
@@ -270,8 +293,8 @@ fun BottomSearchBarWrapper(
 @Composable
 private fun LazyGridItemScope.TabPreviewItem(
     reorderableLazyGridState: ReorderableLazyGridState,
+    tab: Tab,
     activePage: Page?,
-    itemKey: () -> Any,
     swipeToDismissState: SwipeToDismissBoxState,
     isTop: Boolean,
     onClose: () -> Unit,
@@ -279,9 +302,10 @@ private fun LazyGridItemScope.TabPreviewItem(
     colors: CardColors
 ) {
     val view = LocalView.current
+    val interactionSource = remember { MutableInteractionSource() }
     ReorderableItem(
         reorderableLazyGridState,
-        key = itemKey
+        key = tab.tid
     ) {
         SwipeToDismissBox(
             swipeToDismissState,
@@ -290,13 +314,15 @@ private fun LazyGridItemScope.TabPreviewItem(
             backgroundContent = {}
         ) {
             ElevatedCard(
+                interactionSource = interactionSource,
+                onClick = { onSelected() },
                 modifier = Modifier
                     .graphicsLayer {
                         alpha =
                             EaseInOutSine.transform(swipeToDismissState.nonGoogleRetardProgress)
                     }
-                    .clickable { onSelected() }
                     .longPressDraggableHandle(
+                        interactionSource = interactionSource,
                         onDragStarted = {
                             ViewCompat.performHapticFeedback(
                                 view,

@@ -85,25 +85,22 @@ class GeminiTabViewModel @OptIn(DependencyAccessor::class) constructor(
                 } else {
                     val (tab, pages) = value
                     val active = pages.find { page -> page.pid == tab.active_page_id }
-                    if (active == null) {
-                        _tabState.emit(TabState.NoPages)
-                    } else {
-                        emit(active)
-                    }
+                    emit(active.takeIf { tab.active_page_id != null })
                 }
             }
                 .distinctUntilChanged()
                 .combine(_tabState, ::Pair)
                 .collect { (activePage, state) ->
-                    if (
-                        state is TabState.Loaded &&
-                        state.currentPage == activePage
-                    ) {
-                        return@collect
+                    when {
+                        activePage == null -> {
+                            _tabState.emit(TabState.NoPages)
+                        }
+                        state is TabState.Loaded && state.currentPage == activePage -> Unit
+                        else -> {
+                            loadPageFromLink(activePage)
+                                .collect(_tabState::emit)
+                        }
                     }
-
-                    loadPageFromLink(activePage)
-                        .collect(_tabState::emit)
                 }
         }
     }
@@ -155,16 +152,10 @@ class GeminiTabViewModel @OptIn(DependencyAccessor::class) constructor(
     }
 
     override suspend fun goBack() {
-        when(val state = _tabState.value) {
-            is TabState.Loaded -> {
-                kotlin.runCatching {
-                    tabsRepo.deletePage(state.currentPage.pid)
-                }.onFailure {
-                    tabsRepo.deleteTab(state.currentPage.tab_id)
-                    navigator.navCmds.tryEmit { popBackStack() }
-                }
-            }
-            else -> navigator.navCmds.tryEmit { popBackStack() }
+        val removed = tabsRepo.popActivePageByTabId(geminiTab.id)
+        if (!removed) {
+            tabsRepo.deleteTab(geminiTab.id)
+            navigator.navCmds.emit { popBackStack() }
         }
     }
 

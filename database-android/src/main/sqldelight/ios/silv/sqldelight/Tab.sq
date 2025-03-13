@@ -4,8 +4,8 @@ CREATE TABLE IF NOT EXISTS Tab(
 );
 
 insertTab:
-INSERT INTO Tab(active_page_id)
-VALUES (:active_page);
+INSERT INTO Tab(tid, active_page_id)
+VALUES (NULL, :active_page);
 
 lastInsertRowId:
 SELECT last_insert_rowid();
