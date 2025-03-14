@@ -28,6 +28,14 @@ LEFT JOIN Page P ON (
     P.tab_id = T.tid AND P.pid = T.active_page_id
 );
 
+selectTabWithActivePage:
+SELECT T.tid, T.active_page_id, P.pid, P.tab_id, P.url, P.prev_page
+FROM Tab T
+LEFT JOIN Page P ON (
+    P.tab_id = T.tid AND P.pid = T.active_page_id
+)
+WHERE T.tid = :tabId;
+
 selectTabWithPagesById:
 SELECT T.tid, T.active_page_id, P.pid, P.tab_id, P.url, P.prev_page
 FROM Tab T

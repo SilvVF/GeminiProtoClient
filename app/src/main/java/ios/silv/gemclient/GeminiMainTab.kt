@@ -1,10 +1,12 @@
-package ios.silv.gemclient.ui.components
+package ios.silv.gemclient
 
-import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.EaseInOutSine
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.Transition
+import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -22,7 +24,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -58,13 +59,10 @@ import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.ReadOnlyComposable
-import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -89,18 +87,17 @@ import androidx.core.view.ViewCompat
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.toRoute
 import ios.silv.core_android.log.logcat
-import ios.silv.gemclient.BottomBarState
-import ios.silv.gemclient.GeminiBottomBarAction
-import ios.silv.gemclient.GeminiTab
 import ios.silv.gemclient.base.ActionDispatcher
+import ios.silv.gemclient.ui.components.CloseIconButton
+import ios.silv.gemclient.ui.components.FadingEndText
 import ios.silv.gemclient.ui.conditional
+import ios.silv.gemclient.ui.isImeVisibleAsState
 import ios.silv.gemclient.ui.nonGoogleRetardProgress
 import ios.silv.sqldelight.Page
 import ios.silv.sqldelight.Tab
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyGridState
-import java.util.UUID
 
 private enum class BarMode {
     EDITING,
@@ -110,15 +107,9 @@ private enum class BarMode {
 
 
 @Composable
-fun keyboardAsState(): State<Boolean> {
-    val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    return rememberUpdatedState(isImeVisible)
-}
-
-@Composable
-fun BottomSearchBarWrapper(
-    dispatcher: ActionDispatcher<GeminiBottomBarAction>,
-    state: BottomBarState,
+fun GeminiMainTab(
+    dispatcher: ActionDispatcher<GeminiMainAction>,
+    state: GeminiMainState,
     modifier: Modifier = Modifier,
     backStackEntry: NavBackStackEntry? = null,
     content: @Composable BoxScope.() -> Unit
@@ -137,7 +128,7 @@ fun BottomSearchBarWrapper(
         }
     }
 
-    val ime by keyboardAsState()
+    val ime by isImeVisibleAsState()
 
     val activeTab by remember(backStackEntry) {
         derivedStateOf {
@@ -148,12 +139,14 @@ fun BottomSearchBarWrapper(
         }
     }
 
-    var barMode by rememberSaveable {
-        mutableStateOf(BarMode.NONE)
-    }
+    val barMode = remember { MutableTransitionState(BarMode.NONE) }
+    val barModeTransition = rememberTransition(
+        transitionState = barMode,
+        label = "bar-mode-search-transition"
+    )
 
     LaunchedEffect(ime) {
-        barMode = if (ime) {
+        barMode.targetState = if (ime) {
             BarMode.SEARCHING
         } else {
             BarMode.NONE
@@ -161,16 +154,16 @@ fun BottomSearchBarWrapper(
     }
 
     BackHandler(
-        enabled = barMode == BarMode.SEARCHING
+        enabled = barMode.currentState == BarMode.SEARCHING
     ) {
         focusManager.clearFocus()
-        barMode = BarMode.NONE
+        barMode.targetState = BarMode.NONE
     }
+
 
     Column(modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
-            AnimatedContent(
-                targetState = barMode,
+            barModeTransition.AnimatedContent(
                 modifier = Modifier.fillMaxSize(),
                 transitionSpec = {
                     fadeIn() togetherWith fadeOut()
@@ -187,19 +180,21 @@ fun BottomSearchBarWrapper(
                         items(state.tabs, { it.first.tid }) { (tab, activePage) ->
                             val swipeToDismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = {
-                                    when(it) {
+                                    when (it) {
                                         SwipeToDismissBoxValue.StartToEnd -> {
                                             dispatcher.dispatch {
                                                 deleteTab(tab.tid)
                                             }
                                             true
                                         }
+
                                         SwipeToDismissBoxValue.EndToStart -> {
                                             dispatcher.dispatch {
                                                 deleteTab(tab.tid)
                                             }
                                             true
                                         }
+
                                         SwipeToDismissBoxValue.Settled -> false
                                     }
                                 }
@@ -230,8 +225,8 @@ fun BottomSearchBarWrapper(
                     content()
                 }
             }
-            androidx.compose.animation.AnimatedVisibility(
-                visible = barMode == BarMode.EDITING,
+            barModeTransition.AnimatedVisibility(
+                visible = { it == BarMode.EDITING },
                 modifier = Modifier.align(Alignment.BottomEnd)
             ) {
                 FloatingActionButton(
@@ -254,12 +249,12 @@ fun BottomSearchBarWrapper(
             }
         }
         BottomSearchBar(
-            searching = barMode == BarMode.SEARCHING,
+            barModeTransition = barModeTransition,
             modifier = Modifier.fillMaxWidth(),
             focusRequester = focusRequester,
             onFocusChanged = { state ->
                 if (state.hasFocus) {
-                    barMode = BarMode.SEARCHING
+                    barMode.targetState = BarMode.SEARCHING
                 }
             },
             searchText = state.query,
@@ -280,7 +275,7 @@ fun BottomSearchBarWrapper(
                 }
             },
             toggleEditing = {
-                barMode = if (barMode == BarMode.EDITING) {
+                barMode.targetState = if (barMode.currentState == BarMode.EDITING) {
                     BarMode.NONE
                 } else {
                     BarMode.EDITING
@@ -378,7 +373,7 @@ private fun LazyGridItemScope.TabPreviewItem(
 
 @Composable
 private fun BottomSearchBar(
-    searching: Boolean,
+    barModeTransition: Transition<BarMode>,
     modifier: Modifier,
     focusRequester: FocusRequester,
     onFocusChanged: (state: FocusState) -> Unit,
@@ -402,7 +397,9 @@ private fun BottomSearchBar(
                 horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AnimatedVisibility(!searching) {
+                barModeTransition.AnimatedVisibility(
+                    visible = { it != BarMode.SEARCHING }
+                ) {
                     IconButton(
                         onClick = {}
                     ) {
@@ -447,7 +444,9 @@ private fun BottomSearchBar(
                         errorIndicatorColor = Color.Transparent,
                     )
                 )
-                AnimatedVisibility(!searching) {
+                barModeTransition.AnimatedVisibility(
+                    visible = { it != BarMode.SEARCHING }
+                ) {
                     Row(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically

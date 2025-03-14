@@ -7,9 +7,25 @@ import ios.silv.sqldelight.Tab
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+
+internal object TabMapper {
+
+    val tabsWithPageMapper =
+        { tabId: Long, activePageId: Long?, pageId: Long?, pageTabId: Long?, url: String?, prevPage: Long? ->
+            Pair(
+                Tab(tabId, activePageId),
+                if (pageId != null && pageTabId != null && url != null) {
+                    Page(tabId, pageTabId, url, prevPage)
+                } else {
+                    null
+                }
+            )
+        }
+}
 
 class TabsRepo(
     private val databaseHandler: DatabaseHandler,
@@ -72,38 +88,27 @@ class TabsRepo(
         return databaseHandler.awaitOneOrNull { tabQueries.selectTabById(id) }
     }
 
+    fun observeTabWithActivePage(tabId: Long): Flow<Pair<Tab, Page?>?> {
+        return databaseHandler.subscribeToOneOrNull {
+            tabQueries.selectTabWithActivePage(tabId, mapper = TabMapper.tabsWithPageMapper)
+        }
+    }
+
     fun observeTabsWithActivePage(): Flow<List<Pair<Tab, Page?>>> {
         return databaseHandler.subscribeToList {
-            tabQueries.selectTabsWithActivePage(
-                mapper = { tabId, activePageId, pageId, pageTabId, url, prevPage ->
-                    Pair(
-                        Tab(tabId, activePageId),
-                        if (pageId != null && pageTabId != null && url != null) {
-                            Page(tabId, pageTabId, url, prevPage)
-                        } else {
-                            null
-                        }
-                    )
-                }
-            )
+            tabQueries.selectTabsWithActivePage(mapper = TabMapper.tabsWithPageMapper)
         }
     }
 
     fun observeTabStackById(tabId: Long): Flow<Pair<Tab, List<Page>>?> {
-        return databaseHandler.subscribeToList { tabQueries.selectTabWithPagesById(tabId) }
+        return databaseHandler.subscribeToList { tabQueries.selectTabWithPagesById(tabId, mapper = TabMapper.tabsWithPageMapper) }
             .map { items ->
                 if (items.isEmpty()) {
                     null
                 } else {
                     Pair(
-                        Tab(items[0].tid, items[0].active_page_id),
-                        items.mapNotNull { item ->
-                            if (item.pid != null && item.tab_id != null && item.url != null) {
-                                Page(item.pid, item.tab_id, item.url, item.prev_page)
-                            } else {
-                                null
-                            }
-                        }
+                        items[0].first,
+                        items.mapNotNull { it.second }
                     )
                 }
             }

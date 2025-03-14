@@ -7,7 +7,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,10 +22,8 @@ import androidx.navigation.compose.rememberNavController
 import ios.silv.gemclient.base.LocalNavigator
 import ios.silv.gemclient.base.createViewModel
 import ios.silv.gemclient.dependency.rememberDependency
-import ios.silv.gemclient.home.GeminiHomeViewModel
 import ios.silv.gemclient.tab.geminiPageDestination
 import ios.silv.gemclient.ui.LaunchedOnStartedEffect
-import ios.silv.gemclient.ui.components.BottomSearchBarWrapper
 import ios.silv.gemclient.ui.theme.GemClientTheme
 import ios.silv.gemclient.home.geminiHomeDestination
 import kotlinx.serialization.Serializable
@@ -67,11 +64,11 @@ class MainActivity : ComponentActivity() {
                             composable<GeminiMain> {
 
                                 val backStackEntry by mainNavController.currentBackStackEntryAsState()
-                                val bottomBarViewModel = createViewModel { GeminiBottomBarViewModel() }
+                                val bottomBarViewModel = createViewModel { GeminiMainTabViewModel() }
 
                                 val bottomBarState by bottomBarViewModel.state.collectAsStateWithLifecycle()
                                 
-                                BottomSearchBarWrapper(
+                                GeminiMainTab(
                                     dispatcher = bottomBarViewModel,
                                     state = bottomBarState,
                                     backStackEntry = backStackEntry

@@ -42,6 +42,7 @@ import androidx.navigation.compose.composable
 import ios.silv.gemclient.GeminiTab
 import ios.silv.gemclient.base.ActionDispatcher
 import ios.silv.gemclient.base.createViewModel
+import ios.silv.gemclient.tab.TabState.Loaded.Input.InputEvent
 import ios.silv.gemclient.ui.components.AutoScrollIndicator
 import ios.silv.gemclient.ui.sampleScrollingState
 import ios.silv.gemini.ContentNode
@@ -146,7 +147,7 @@ private fun GeminiPageContent(
             }
 
             is TabState.Loaded.Input -> {
-                TabStateInputContent(dispatcher)
+                TabStateInputContent(state)
             }
 
             is TabState.Loaded.Done -> {
@@ -162,20 +163,18 @@ private fun GeminiPageContent(
 
 @Composable
 private fun TabStateInputContent(
-    dispatcher: ActionDispatcher<GeminiTabViewModelAction>,
+    state: TabState.Loaded.Input
 ) {
-    var input by rememberSaveable { mutableStateOf("") }
+    val input by state.input.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(
             value = input,
-            onValueChange = { input = it },
+            onValueChange = { state.events(InputEvent.OnInputChanged(it)) },
             trailingIcon = {
                 IconButton(
                     onClick = {
-                        dispatcher.dispatch {
-                            submitInput(input)
-                        }
+                        state.events(InputEvent.Submit)
                     }
                 ) {
                     Icon(

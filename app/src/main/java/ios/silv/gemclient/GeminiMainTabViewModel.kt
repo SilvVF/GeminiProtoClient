@@ -10,16 +10,14 @@ import ios.silv.gemclient.dependency.DependencyAccessor
 import ios.silv.gemclient.dependency.commonDeps
 import ios.silv.sqldelight.Page
 import ios.silv.sqldelight.Tab
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
-import kotlin.math.log
 
-interface GeminiBottomBarAction {
+interface GeminiMainAction {
     fun onSearchChanged(query: String)
     fun reorderTabs(from: Int, to: Int)
     fun goToTab(tab: Tab)
@@ -28,20 +26,20 @@ interface GeminiBottomBarAction {
     suspend fun createNewPage(query: String, tabId: Long)
 }
 
-data class BottomBarState(
+data class GeminiMainState(
     val tabs: List<Pair<Tab, Page?>> = emptyList(),
     val query: String = ""
 )
 
-class GeminiBottomBarViewModel @OptIn(DependencyAccessor::class) constructor(
+class GeminiMainTabViewModel @OptIn(DependencyAccessor::class) constructor(
     private val tabsRepo: TabsRepo = commonDeps.tabsRepo,
     private val navigator: ComposeNavigator = commonDeps.navigator,
-) : GeminiBottomBarAction,
-    ViewModelActionHandler<GeminiBottomBarAction>() {
-    override val handler: GeminiBottomBarAction = this
+) : GeminiMainAction,
+    ViewModelActionHandler<GeminiMainAction>() {
+    override val handler: GeminiMainAction = this
 
-    private val _state = MutableStateFlow(BottomBarState())
-    val state: StateFlow<BottomBarState> get() = _state
+    private val _state = MutableStateFlow(GeminiMainState())
+    val state: StateFlow<GeminiMainState> get() = _state
 
     init {
         tabsRepo
@@ -67,7 +65,7 @@ class GeminiBottomBarViewModel @OptIn(DependencyAccessor::class) constructor(
         val newValues = new.groupBy { (tab) -> tab.tid }
         val updated = prev.mapNotNull { (tab) -> newValues[tab.tid]?.firstOrNull() }
 
-        val updatedKeys = updated.map{ (tab) -> tab.tid }.toSet()
+        val updatedKeys = updated.map { (tab) -> tab.tid }.toSet()
         val added = new.filter { (tab) -> tab.tid !in updatedKeys }
 
         return buildList {

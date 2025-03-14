@@ -2,6 +2,7 @@ package ios.silv.gemclient.tab
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
@@ -12,11 +13,18 @@ import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.base.ViewModelActionHandler
 import ios.silv.gemclient.dependency.DependencyAccessor
 import ios.silv.gemclient.dependency.commonDeps
+import ios.silv.gemclient.tab.TabState.Loaded
+import ios.silv.gemclient.tab.TabState.Loaded.Input.InputEvent.OnInputChanged
+import ios.silv.gemclient.tab.TabState.Loaded.Input.InputEvent.Submit
 import ios.silv.gemini.ContentNode
 import ios.silv.gemini.GeminiCode
 import ios.silv.gemini.GeminiParser
 import ios.silv.gemini.Response
 import ios.silv.sqldelight.Page
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,8 +33,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.transform
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -34,7 +44,6 @@ interface GeminiTabViewModelAction {
     suspend fun loadPage(link: String)
     suspend fun goBack()
     suspend fun refresh()
-    suspend fun submitInput(input: String)
 }
 
 @Immutable
@@ -45,10 +54,6 @@ data class UiNode(
     val contentType: String = node::class.toString()
 )
 
-data class TabVMState(
-
-    val tabState: TabState,
-)
 
 sealed interface TabState {
     data object Idle : TabState
@@ -57,9 +62,22 @@ sealed interface TabState {
 
     sealed class Loaded(val currentPage: Page) : TabState {
         data class Loading(val page: Page) : Loaded(page)
-        data class Input(val page: Page, val prompt: String) : Loaded(page)
+        data class Input(
+            val page: Page,
+            val prompt: String,
+            val input: StateFlow<TextFieldValue>,
+            val events: (InputEvent) -> Unit
+        ) : Loaded(page) {
+
+            sealed interface InputEvent {
+                data class OnInputChanged(val input: TextFieldValue): InputEvent
+                data object Submit: InputEvent
+            }
+        }
         data class Done(val page: Page, val nodes: List<UiNode>) : Loaded(page)
     }
+
+    val activePage get() = (this as? Loaded)?.currentPage
 }
 
 class GeminiTabViewModel @OptIn(DependencyAccessor::class) constructor(
@@ -69,44 +87,52 @@ class GeminiTabViewModel @OptIn(DependencyAccessor::class) constructor(
     private val tabsRepo: TabsRepo = commonDeps.tabsRepo
 ) : GeminiTabViewModelAction, ViewModelActionHandler<GeminiTabViewModelAction>() {
 
-    private val geminiTab = savedStateHandle.toRoute<GeminiTab>()
     override val handler: GeminiTabViewModelAction = this
 
-    private val stack = tabsRepo.observeTabStackById(geminiTab.id)
+    private val geminiTab = savedStateHandle.toRoute<GeminiTab>()
+    private val tabWithActivePage = tabsRepo.observeTabWithActivePage(geminiTab.id)
 
     private val _tabState = MutableStateFlow<TabState>(TabState.Idle)
     val tabState: StateFlow<TabState> get() = _tabState
 
+    private val _input by lazy { MutableStateFlow(TextFieldValue()) }
+    private val input: StateFlow<TextFieldValue> get() = _input
+
+    var loadJob: Job? = null
+
     init {
         viewModelScope.launch {
-            stack.transform { value ->
-                if (value == null) {
-                    _tabState.emit(TabState.Error)
-                } else {
-                    val (tab, pages) = value
-                    val active = pages.find { page -> page.pid == tab.active_page_id }
-                    emit(active.takeIf { tab.active_page_id != null })
-                }
-            }
-                .distinctUntilChanged()
-                .combine(_tabState, ::Pair)
-                .collect { (activePage, state) ->
+            tabWithActivePage
+                .collect { pair ->
+
+                    val (tab, activePage) = pair ?: (null to null)
                     when {
+                        tab == null -> {
+                            navigator.navCmds.emit { popBackStack() }
+                            _tabState.emit(TabState.Error)
+                        }
                         activePage == null -> {
                             _tabState.emit(TabState.NoPages)
                         }
-                        state is TabState.Loaded && state.currentPage == activePage -> Unit
-                        else -> {
-                            loadPageFromLink(activePage)
-                                .collect(_tabState::emit)
-                        }
+                        else -> refreshActivePage(activePage)
                     }
                 }
         }
     }
 
-    private fun loadPageFromLink(page: Page): Flow<TabState.Loaded> = flow {
-        emit(TabState.Loaded.Loading(page))
+    private fun CoroutineScope.refreshActivePage(page: Page) = launch {
+        if (tabState.value is Loaded.Loading && tabState.value.activePage == page) {
+            return@launch
+        }
+
+        loadJob?.cancelAndJoin()
+        loadJob = launch {
+            loadPageFromLink(page).collect(_tabState::emit)
+        }
+    }
+
+    private fun loadPageFromLink(page: Page): Flow<Loaded> = flow {
+        emit(Loaded.Loading(page))
 
         client.makeGeminiQuery(page.url).onSuccess { response ->
             logcat { "$response" }
@@ -114,7 +140,7 @@ class GeminiTabViewModel @OptIn(DependencyAccessor::class) constructor(
         }.onFailure {
             logcat { it.stackTraceToString() }
             emit(
-                TabState.Loaded.Done(
+                Loaded.Done(
                     page,
                     listOf(
                         UiNode(
@@ -130,11 +156,20 @@ class GeminiTabViewModel @OptIn(DependencyAccessor::class) constructor(
     private suspend fun transformSuccessResponse(
         page: Page,
         response: Response
-    ): TabState.Loaded {
+    ): Loaded {
         return if (response.status == GeminiCode.StatusInput) {
-            TabState.Loaded.Input(page, response.meta)
+            Loaded.Input(page, response.meta, input) { event ->
+                when(event) {
+                    is OnInputChanged -> {
+                        _input.value = event.input
+                    }
+                    Submit -> {
+                        // TODO(handle submit input)
+                    }
+                }
+            }
         } else {
-            TabState.Loaded.Done(
+            Loaded.Done(
                 page,
                 GeminiParser.parse(page.url, response).map { node ->
                     UiNode(
@@ -153,29 +188,18 @@ class GeminiTabViewModel @OptIn(DependencyAccessor::class) constructor(
 
     override suspend fun goBack() {
         val removed = tabsRepo.popActivePageByTabId(geminiTab.id)
+        // if a page was not removed
+        // the tab already had no pages so delete the tab
         if (!removed) {
             tabsRepo.deleteTab(geminiTab.id)
-            navigator.navCmds.emit { popBackStack() }
         }
     }
 
     override suspend fun refresh() {
-        val state = _tabState.value
-        if (
-            state is TabState.Loaded &&
-            state !is TabState.Loaded.Loading
-        ) {
-            viewModelScope.launch {
-                loadPageFromLink(state.currentPage)
-                    .collect(_tabState::emit)
+        viewModelScope.launch {
+            tabState.value.activePage?.let { page ->
+                refreshActivePage(page)
             }
-        }
-    }
-
-    override suspend fun submitInput(input: String) {
-        val state = _tabState.value
-        if (state is TabState.Loaded.Input) {
-            tabsRepo.insertPage(geminiTab.id, state.page.url + input)
         }
     }
 }
