@@ -1,9 +1,6 @@
 package ios.silv.gemclient.home
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -22,30 +19,26 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import ios.silv.gemclient.GeminiHome
 import ios.silv.gemclient.GeminiSettings
-import ios.silv.gemclient.base.ActionDispatcher
 import ios.silv.gemclient.base.LocalNavigator
-import ios.silv.gemclient.base.createViewModel
+import ios.silv.gemclient.dependency.metroViewModel
 
 fun NavGraphBuilder.geminiHomeDestination() {
     composable<GeminiHome> {
 
-        val viewModel = createViewModel { GeminiHomeViewModel() }
+        val viewModel = metroViewModel<HomeViewModel>()
 
         val state by viewModel.state.collectAsStateWithLifecycle()
 
         GeminiHomeContent(
-            dispatcher = viewModel,
             state = state,
         )
     }
@@ -55,23 +48,12 @@ fun NavGraphBuilder.geminiHomeDestination() {
 @Composable
 private fun PreviewGeminiHomeContent() {
 
-    val dispatcher = remember {
-        object : ActionDispatcher<GeminiHomeViewModelAction> {
-            override fun dispatch(action: suspend GeminiHomeViewModelAction.() -> Unit) {
-            }
-
-            override fun immediate(action: GeminiHomeViewModelAction.() -> Unit) {
-            }
-        }
-    }
-
-    GeminiHomeContent(dispatcher, HomeViewModelState())
+    GeminiHomeContent(HomeViewModelState())
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GeminiHomeContent(
-    dispatcher: ActionDispatcher<GeminiHomeViewModelAction>,
     state: HomeViewModelState,
 ) {
     val topBarScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -102,7 +84,7 @@ private fun GeminiHomeContent(
                         Text("nav")
                     }
                     ToggleIncognitoButton(
-                        dispatcher,
+                        { state.events(HomeViewModelEvent.ToggleIncognito) },
                         state.incognito
                     )
                 }
@@ -118,22 +100,20 @@ private fun GeminiHomeContent(
                 .verticalScroll(rememberScrollState())
                 .fillMaxSize()
         ) {
-
+            Text("HOME")
         }
     }
 }
 
 @Composable
 private fun ToggleIncognitoButton(
-    dispatcher: ActionDispatcher<GeminiHomeViewModelAction>,
+    toggleIncognito: () -> Unit,
     incognito: Boolean,
 ) {
     FilledIconToggleButton(
         checked = incognito,
         onCheckedChange = {
-            dispatcher.dispatch {
-                toggleIncognito()
-            }
+            toggleIncognito()
         }
     ) {
         Icon(

@@ -1,31 +1,22 @@
 package ios.silv.gemclient
 
 import android.app.Application
-import ios.silv.gemclient.dependency.AndroidDependencies
-import ios.silv.gemclient.dependency.CommonDependencies
-import ios.silv.gemclient.dependency.DependencyAccessor
-import ios.silv.gemclient.dependency.androidDeps
-import ios.silv.gemclient.dependency.commonDeps
+import dev.zacsweers.metro.createGraphFactory
 import ios.silv.core_android.log.AndroidLogcatLogger
 import ios.silv.core_android.log.LogPriority
+import ios.silv.gemclient.dependency.AppGraph
 
 
 class App : Application() {
 
-    @OptIn(DependencyAccessor::class)
+    val appGraph by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        createGraphFactory<AppGraph.Factory>()
+            .create(this)
+    }
+
     override fun onCreate() {
         super.onCreate()
 
         AndroidLogcatLogger.installOnDebuggableApp(this, minPriority = LogPriority.VERBOSE)
-
-        commonDeps = object : CommonDependencies() {
-
-            override val application: Application = this@App
-        }
-
-        androidDeps = object : AndroidDependencies() {
-
-            override val application: Application = this@App
-        }
     }
 }

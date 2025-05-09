@@ -8,10 +8,7 @@ sealed interface TopLevelDest
 sealed interface Screen
 
 @Serializable
-data object GeminiMain: TopLevelDest
-
-@Serializable
-data object GeminiHome: Screen
+data object GeminiHome: TopLevelDest
 
 @Serializable
 data class GeminiTab(

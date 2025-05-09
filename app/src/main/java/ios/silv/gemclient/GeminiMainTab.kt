@@ -59,12 +59,10 @@ import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,7 +85,7 @@ import androidx.core.view.ViewCompat
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.toRoute
 import ios.silv.core_android.log.logcat
-import ios.silv.gemclient.base.ActionDispatcher
+import ios.silv.gemclient.MainTabEvent.*
 import ios.silv.gemclient.ui.components.CloseIconButton
 import ios.silv.gemclient.ui.components.FadingEndText
 import ios.silv.gemclient.ui.conditional
@@ -99,17 +97,18 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyGridState
 
-private enum class BarMode {
+enum class BarMode {
     EDITING,
     SEARCHING,
     NONE
 }
 
+val LocalBarMode =
+    compositionLocalOf<MutableTransitionState<BarMode>> { error("not provided in scope") }
 
 @Composable
-fun GeminiMainTab(
-    dispatcher: ActionDispatcher<GeminiMainAction>,
-    state: GeminiMainState,
+fun GeminiBasePage(
+    state: MainState,
     modifier: Modifier = Modifier,
     backStackEntry: NavBackStackEntry? = null,
     content: @Composable BoxScope.() -> Unit
@@ -123,9 +122,7 @@ fun GeminiMainTab(
         lazyGridState,
     ) { from, to ->
         logcat { "reordering $from, $to" }
-        dispatcher.immediate {
-            reorderTabs(from.index, to.index)
-        }
+        state.eventSink(ReorderTabs(from.index, to.index))
     }
 
     val ime by isImeVisibleAsState()
@@ -154,7 +151,7 @@ fun GeminiMainTab(
     }
 
     BackHandler(
-        enabled = barMode.currentState == BarMode.SEARCHING
+        enabled = barMode.currentState != BarMode.NONE
     ) {
         focusManager.clearFocus()
         barMode.targetState = BarMode.NONE
@@ -181,20 +178,13 @@ fun GeminiMainTab(
                             val swipeToDismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = {
                                     when (it) {
-                                        SwipeToDismissBoxValue.StartToEnd -> {
-                                            dispatcher.dispatch {
-                                                deleteTab(tab.tid)
-                                            }
+                                        SwipeToDismissBoxValue.StartToEnd,
+                                        SwipeToDismissBoxValue.EndToStart-> {
+                                            state.eventSink(
+                                                DeleteTab(tab.tid)
+                                            )
                                             true
                                         }
-
-                                        SwipeToDismissBoxValue.EndToStart -> {
-                                            dispatcher.dispatch {
-                                                deleteTab(tab.tid)
-                                            }
-                                            true
-                                        }
-
                                         SwipeToDismissBoxValue.Settled -> false
                                     }
                                 }
@@ -206,14 +196,15 @@ fun GeminiMainTab(
                                 swipeToDismissState = swipeToDismissState,
                                 isTop = isTop,
                                 onClose = {
-                                    dispatcher.dispatch {
-                                        deleteTab(tab.tid)
-                                    }
+                                    state.eventSink(
+                                        DeleteTab(tab.tid)
+                                    )
                                 },
                                 onSelected = {
-                                    dispatcher.immediate {
-                                        goToTab(tab)
-                                    }
+                                    state.eventSink(
+                                        GoToTab(tab)
+                                    )
+                                    barMode.targetState = BarMode.NONE
                                 },
                                 tab = tab,
                                 activePage = activePage,
@@ -222,7 +213,11 @@ fun GeminiMainTab(
                         }
                     }
                 } else {
-                    content()
+                    CompositionLocalProvider(
+                        LocalBarMode provides barMode
+                    ) {
+                        content()
+                    }
                 }
             }
             barModeTransition.AnimatedVisibility(
@@ -231,9 +226,7 @@ fun GeminiMainTab(
             ) {
                 FloatingActionButton(
                     onClick = {
-                        dispatcher.dispatch {
-                            createNewTab(null)
-                        }
+                        state.eventSink(CreateBlankTab)
                     },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -259,19 +252,15 @@ fun GeminiMainTab(
             },
             searchText = state.query,
             onTextChanged = {
-                dispatcher.immediate {
-                    onSearchChanged(it)
-                }
+                state.eventSink(SearchChanged(it))
             },
             tabsCount = state.tabs.size,
             onSearch = {
-                dispatcher.dispatch {
-                    val tab = activeTab
-                    if (tab != null) {
-                        createNewPage(state.query, tab.id)
-                    } else {
-                        createNewTab(state.query.takeIf { it.isNotBlank() })
-                    }
+               val tab = activeTab
+                if (tab != null) {
+                    state.eventSink(CreateNewPage(tab.id))
+                } else {
+                    state.eventSink(CreateNewTab)
                 }
             },
             toggleEditing = {
@@ -298,6 +287,7 @@ private fun LazyGridItemScope.TabPreviewItem(
 ) {
     val view = LocalView.current
     val interactionSource = remember { MutableInteractionSource() }
+
     ReorderableItem(
         reorderableLazyGridState,
         key = tab.tid

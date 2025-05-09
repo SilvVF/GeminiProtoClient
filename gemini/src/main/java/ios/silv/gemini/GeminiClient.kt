@@ -209,7 +209,6 @@ class GeminiClient(
             DON'T TIMEOUT
          */
         withTimeout(SOCKET_CLOSE_TIMEOUT) {
-            open?.sock?.close()
             open?.sock?.awaitClosed()
         }
 
