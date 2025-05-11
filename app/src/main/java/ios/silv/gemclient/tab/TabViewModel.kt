@@ -1,5 +1,6 @@
 package ios.silv.gemclient.tab
 
+import androidx.compose.runtime.Composable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,41 +12,20 @@ import ios.silv.gemclient.GeminiTab
 import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.dependency.ViewModelKey
 import ios.silv.gemclient.dependency.ViewModelScope
-import ios.silv.gemclient.ui.UiEvent
-import ios.silv.gemclient.ui.UiState
-import ios.silv.gemini.GeminiClient
-import ios.silv.sqldelight.Page
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-sealed interface TabEvent : UiEvent {
-    data class LoadPage(val link: String) : TabEvent
-    data object GoBack : TabEvent
-}
-
-
-data class TabState(
-    val events: (TabEvent) -> Unit,
-    val state: TabData
-): UiState
-
-sealed interface TabData {
-    data object Idle : TabData
-    data object Error : TabData
-    data object NoPages : TabData
-    data class Loaded(val presenter: PagePresenter) : TabData
-}
 
 @ContributesIntoMap(ViewModelScope::class)
 @ViewModelKey(TabViewModel::class)
 @Inject
 class TabViewModel(
     savedStateHandle: SavedStateHandle,
-    private val pagePresenterFactory: PagePresenter.Factory,
-    private val tabsRepo: TabsRepo
+    private val tabsRepo: TabsRepo,
+    private val navigator: ComposeNavigator
 ) : ViewModel() {
 
     private val geminiTab = savedStateHandle.toRoute<GeminiTab>()
@@ -53,7 +33,7 @@ class TabViewModel(
         .observeTabWithActivePage(geminiTab.id)
         .map { it ?: (null to null) }
 
-    private val eventSink = { event: TabEvent ->
+    fun onEvent(event: TabEvent) {
         when (event) {
             TabEvent.GoBack -> goBack()
             is TabEvent.LoadPage -> loadPage(event.link)
@@ -63,23 +43,16 @@ class TabViewModel(
     val state = tabWithActivePage
         .distinctUntilChanged()
         .map { (tab, activePage) ->
-            val tabData = when {
-                tab == null -> TabData.Error
-                activePage == null -> TabData.NoPages
-                else -> TabData.Loaded(
-                    pagePresenterFactory.create(activePage, viewModelScope)
-                )
+            when {
+                tab == null -> TabState.Error
+                activePage == null -> TabState.NoPages
+                else -> TabState.Loaded(activePage)
             }
-
-            TabState(
-                eventSink,
-                tabData
-            )
         }
         .stateIn(
             viewModelScope,
             SharingStarted.Lazily,
-            TabState(eventSink, TabData.Idle)
+            TabState.Idle
         )
 
     private fun loadPage(link: String) {
@@ -95,6 +68,10 @@ class TabViewModel(
             // the tab already had no pages so delete the tab
             if (!removed) {
                 tabsRepo.deleteTab(geminiTab.id)
+
+                navigator.navCmds.tryEmit {
+                    popBackStack()
+                }
             }
         }
     }

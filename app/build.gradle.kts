@@ -55,7 +55,9 @@ android {
 
     composeCompiler {
         reportsDestination = layout.buildDirectory.dir("compose_compiler")
-        stabilityConfigurationFile = rootProject.layout.projectDirectory.file("stability_config.conf")
+        stabilityConfigurationFiles.add(
+            rootProject.layout.projectDirectory.file("stability_config.conf")
+        )
     }
 }
 
@@ -67,6 +69,8 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(libs.androidx.activity.compose)
+
+    implementation(libs.rin)
 
     api(project(":core-android"))
     api(project(":gemini"))

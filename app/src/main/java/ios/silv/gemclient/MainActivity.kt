@@ -19,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -31,11 +30,12 @@ import dev.zacsweers.metro.binding
 import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.base.LocalNavigator
 import ios.silv.gemclient.dependency.ActivityKey
+import ios.silv.gemclient.dependency.LocalMetroPresenterFactory
+import ios.silv.gemclient.dependency.PresenterFactory
 import ios.silv.gemclient.dependency.metroViewModel
-import ios.silv.gemclient.tab.geminiPageDestination
-import ios.silv.gemclient.ui.LaunchedOnStartedEffect
-import ios.silv.gemclient.ui.theme.GemClientTheme
 import ios.silv.gemclient.home.geminiHomeDestination
+import ios.silv.gemclient.tab.geminiTabDestination
+import ios.silv.gemclient.ui.theme.GemClientTheme
 import kotlinx.coroutines.launch
 
 
@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 @Inject
 class MainActivity(
     private val viewModelFactory: ViewModelProvider.Factory,
+    private val presenterFactory: PresenterFactory,
     private val navigator: ComposeNavigator,
 ) : ComponentActivity() {
 
@@ -73,7 +74,8 @@ class MainActivity(
             GemClientTheme {
                 Surface {
                     CompositionLocalProvider(
-                        LocalNavigator provides navigator
+                        LocalNavigator provides navigator,
+                        LocalMetroPresenterFactory provides presenterFactory
                     ) {
 
                         val backStackEntry by navController.currentBackStackEntryAsState()
@@ -91,7 +93,7 @@ class MainActivity(
                             ) {
                                 geminiHomeDestination()
 
-                                geminiPageDestination()
+                                geminiTabDestination()
 
                                 composable<GeminiSettings> {
                                     Box(Modifier.fillMaxSize()) {

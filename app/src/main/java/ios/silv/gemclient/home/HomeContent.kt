@@ -18,43 +18,37 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.tooling.preview.PreviewLightDark
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import ios.silv.gemclient.GeminiHome
 import ios.silv.gemclient.GeminiSettings
 import ios.silv.gemclient.base.LocalNavigator
-import ios.silv.gemclient.dependency.metroViewModel
+import ios.silv.gemclient.dependency.metroPresenter
+import ios.silv.gemclient.ui.EventFlow
+import ios.silv.gemclient.ui.rememberEventFlow
 
 fun NavGraphBuilder.geminiHomeDestination() {
     composable<GeminiHome> {
+        val presenter = metroPresenter<HomePresenter>()
 
-        val viewModel = metroViewModel<HomeViewModel>()
-
-        val state by viewModel.state.collectAsStateWithLifecycle()
+        val eventsFlow = rememberEventFlow<HomeEvent>()
+        val state = presenter.present(eventsFlow)
 
         GeminiHomeContent(
+            eventsFlow,
             state = state,
         )
     }
 }
 
-@PreviewLightDark
-@Composable
-private fun PreviewGeminiHomeContent() {
-
-    GeminiHomeContent(HomeViewModelState())
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GeminiHomeContent(
-    state: HomeViewModelState,
+    eventsFlow: EventFlow<HomeEvent>,
+    state: HomeUiState,
 ) {
     val topBarScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     Scaffold(
@@ -84,7 +78,7 @@ private fun GeminiHomeContent(
                         Text("nav")
                     }
                     ToggleIncognitoButton(
-                        { state.events(HomeViewModelEvent.ToggleIncognito) },
+                        { eventsFlow.tryEmit(HomeEvent.ToggleIncognito) },
                         state.incognito
                     )
                 }

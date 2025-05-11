@@ -1,11 +1,24 @@
 package ios.silv.gemclient.tab
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
-import dev.zacsweers.metro.Assisted
-import dev.zacsweers.metro.AssistedFactory
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
+import io.github.takahirom.rin.produceRetainedState
+import io.github.takahirom.rin.rememberRetained
 import ios.silv.database_android.dao.TabsRepo
+import ios.silv.gemclient.dependency.Presenter
+import ios.silv.gemclient.dependency.PresenterKey
+import ios.silv.gemclient.dependency.PresenterScope
+import ios.silv.gemclient.tab.PageState.Content.*
+import ios.silv.gemclient.ui.EventEffect
+import ios.silv.gemclient.ui.EventFlow
 import ios.silv.gemclient.ui.UiEvent
 import ios.silv.gemclient.ui.UiState
 import ios.silv.gemini.ContentNode
@@ -14,99 +27,69 @@ import ios.silv.gemini.GeminiCode
 import ios.silv.gemini.GeminiParser
 import ios.silv.gemini.Response
 import ios.silv.sqldelight.Page
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import java.util.UUID
 
-sealed interface InputEvent : UiEvent {
-    data class OnInputChanged(val input: String) : InputEvent
-    data object Submit : InputEvent
-}
-
-@Immutable
-@Stable
-data class UiNode(
-    val node: ContentNode,
-    val key: String? = UUID.randomUUID().toString(),
-    val contentType: String = node::class.toString()
-)
-
-sealed interface PageState : UiState {
-
-    data class Input(
-        val query: String,
-        val events: (InputEvent) -> Unit
-    ) : PageState
-
-    data class Content(
-        val nodes: List<UiNode>
-    ) : PageState
-
-    data object Loading : PageState
-    data class Error(val message: String) : PageState
-}
-
-
-
+@ContributesIntoMap(PresenterScope::class)
+@PresenterKey(PagePresenter::class)
 @Inject
 class PagePresenter(
-    @Assisted private val page: Page,
-    @Assisted private val scope: CoroutineScope,
     private val client: GeminiClient,
     private val tabsRepo: TabsRepo
-) {
+): Presenter {
 
-    private var loadJob: Job? = null
+    @Composable
+    fun present(page: Page, events: EventFlow<PageEvent>): PageState {
+        var input by rememberRetained { mutableStateOf("") }
+        var response by rememberRetained {
+            mutableStateOf<Result<Response>?>(null)
+        }
 
-    private val inputFlow = MutableStateFlow("")
-    private val responseFlow = MutableStateFlow<Result<Response>?>(null)
-    private val parsedNodes = responseFlow
-        .map { it?.getOrNull() }
-        .distinctUntilChanged()
-        .mapLatest { res ->
-            if (res == null || res.status == GeminiCode.StatusInput) {
-                emptyList()
-            } else {
-                GeminiParser.parse(page.url, res)
-                    .map(::UiNode)
-                    .toList()
+        LaunchedEffect(page) {
+            response = client.makeGeminiQuery(page.url)
+        }
+
+        EventEffect(events) { event ->
+            when(event) {
+                is PageEvent.OnInputChanged -> input = event.input
+                PageEvent.Refresh -> {
+
+                }
+                PageEvent.Submit -> {
+                    tabsRepo.insertPage(page.tab_id, page.url + "?query=${input}")
+                }
             }
         }
 
-
-    private val inputEventSink: (InputEvent) -> Unit = { e: InputEvent ->
-        when (e) {
-            is InputEvent.OnInputChanged -> inputFlow.update { e.input }
-            InputEvent.Submit -> scope.launch {
-                tabsRepo.insertPage(page.tab_id, page.url + "?query=${inputFlow.value}")
-            }
+        val parsedNodes by produceRetainedState(emptyList<UiNode>()) {
+            snapshotFlow { response }
+                .map { it?.getOrNull() }
+                .distinctUntilChanged()
+                .mapLatest { res ->
+                    value = if (res == null || res.status == GeminiCode.StatusInput) {
+                        emptyList()
+                    } else {
+                        GeminiParser.parse(page.url, res)
+                            .map(::UiNode)
+                            .toList()
+                    }
+                }
+                .collect()
         }
-    }
 
-    val state = combine(
-        responseFlow,
-        inputFlow,
-        parsedNodes
-    ) { res, inp, nodes ->
-        when {
-            res == null -> PageState.Loading
+        return  when(val res = response) {
+            null -> PageState.Loading
             else -> {
                 res.fold(
                     onSuccess = {
                         if (it.status == GeminiCode.StatusInput) {
-                            PageState.Input(inp, inputEventSink)
+                            PageState.Input(input)
                         } else {
-                            PageState.Content(nodes = nodes)
+                            PageState.Content(parsedNodes)
                         }
                     },
                     onFailure = {
@@ -115,25 +98,5 @@ class PagePresenter(
                 )
             }
         }
-    }
-        .stateIn(scope, SharingStarted.Lazily, PageState.Loading)
-
-    init {
-        loadPage()
-    }
-
-    fun loadPage() {
-        loadJob = scope.launch {
-            val res = client.makeGeminiQuery(page.url)
-            responseFlow.emit(res)
-        }
-    }
-
-    @AssistedFactory
-    interface Factory {
-        fun create(
-            page: Page,
-            scope: CoroutineScope,
-        ): PagePresenter
     }
 }

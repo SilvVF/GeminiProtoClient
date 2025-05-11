@@ -1,7 +1,17 @@
 package ios.silv.gemclient.ui
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 
 
 /**
@@ -35,3 +45,38 @@ interface UiEvent
  */
 @Stable
 interface UiState
+
+@OptIn(ExperimentalForInheritanceCoroutinesApi::class)
+@Stable
+class EventFlow<T>(
+    replay: Int = 0,
+    extraBufferCapacity: Int = 0,
+    onBufferOverflow: BufferOverflow = BufferOverflow.SUSPEND
+): MutableSharedFlow<T> by MutableSharedFlow(replay, extraBufferCapacity, onBufferOverflow)
+
+@Composable
+fun <T> rememberEventFlow(): EventFlow<T> {
+    return remember {
+        EventFlow(extraBufferCapacity = 20)
+    }
+}
+
+@Composable
+fun <EVENT> EventEffect(
+    eventFlow: EventFlow<EVENT>,
+    block: suspend CoroutineScope.(EVENT) -> Unit,
+) {
+    LaunchedEffect(eventFlow) {
+        try {
+            supervisorScope {
+                eventFlow.collect { event ->
+                    launch {
+                        block(event)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+        }
+    }
+}

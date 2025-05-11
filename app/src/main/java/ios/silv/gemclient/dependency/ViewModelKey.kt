@@ -2,6 +2,8 @@ package ios.silv.gemclient.dependency
 
 import androidx.lifecycle.ViewModel
 import dev.zacsweers.metro.MapKey
+import ios.silv.gemclient.ui.UiEvent
+import ios.silv.gemclient.ui.UiState
 import kotlin.reflect.KClass
 
 
@@ -10,3 +12,9 @@ import kotlin.reflect.KClass
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class ViewModelKey(val value: KClass<out ViewModel>)
+
+/** A [MapKey] annotation for binding ViewModels in a multibinding map. */
+@MapKey
+@Target(AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class PresenterKey(val value: KClass<out Presenter>)

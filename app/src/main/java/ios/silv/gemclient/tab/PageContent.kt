@@ -2,7 +2,6 @@
 
 package ios.silv.gemclient.tab
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,85 +33,49 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavGraphBuilder
-import androidx.navigation.compose.composable
-import ios.silv.gemclient.BarMode
-import ios.silv.gemclient.GeminiTab
-import ios.silv.gemclient.LocalBarMode
-import ios.silv.gemclient.dependency.metroViewModel
+import ios.silv.gemclient.dependency.metroPresenter
+import ios.silv.gemclient.ui.EventFlow
 import ios.silv.gemclient.ui.components.AutoScrollIndicator
+import ios.silv.gemclient.ui.rememberEventFlow
 import ios.silv.gemclient.ui.sampleScrollingState
 import ios.silv.gemini.ContentNode
 import kotlinx.coroutines.launch
 
-fun NavGraphBuilder.geminiPageDestination() {
-    composable<GeminiTab> {
-        val viewModel: TabViewModel = metroViewModel()
+@Composable
+fun PageContent(state: TabState.Loaded, tabEvents: (TabEvent) -> Unit) {
+    val presenter = metroPresenter<PagePresenter>()
 
-        val state by viewModel.state.collectAsStateWithLifecycle()
-        val barMode = LocalBarMode.current
+    val events = rememberEventFlow<PageEvent>()
+    val pageState = presenter.present(state.page, events)
 
-        BackHandler {
-            if (barMode.currentState != BarMode.NONE) {
-                barMode.targetState = BarMode.NONE
-            } else {
-                viewModel.goBack()
-            }
-        }
 
-        GeminiPageContent(
-            state = state,
-        )
+    PullToRefreshBox(
+        isRefreshing = pageState is PageState.Loading,
+        onRefresh = {
+            events.tryEmit(PageEvent.Refresh)
+        },
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()),
+    ) {
+        PageLoadedContent(tabEvents, pageState, events)
     }
 }
 
 
 @Composable
-private fun GeminiPageContent(
-    state: TabState,
-) {
-    when (val s = state.state) {
-        is TabData.Idle -> {
-            Box(Modifier.fillMaxSize()) {
-                CircularProgressIndicator(Modifier.align(Alignment.Center))
-            }
-        }
-
-        is TabData.Loaded -> {
-            val pageState by s.presenter.state.collectAsStateWithLifecycle()
-
-            PullToRefreshBox(
-                isRefreshing = pageState is PageState.Loading,
-                onRefresh = {
-                    s.presenter.loadPage()
-                },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()),
-            ) {
-                TabStateDoneContent(state.events, pageState)
-            }
-        }
-
-        else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(s.toString())
-        }
-    }
-}
-
-@Composable
-private fun TabStateInputContent(
-    state: PageState.Input
+private fun PageInputContent(
+    state: PageState.Input,
+    events: EventFlow<PageEvent>
 ) {
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(
             value = state.query,
-            onValueChange = { state.events(InputEvent.OnInputChanged(it)) },
+            onValueChange = { events.tryEmit(PageEvent.OnInputChanged(it)) },
             trailingIcon = {
                 IconButton(
                     onClick = {
-                        state.events(InputEvent.Submit)
+                        events.tryEmit(PageEvent.Submit)
                     }
                 ) {
                     Icon(
@@ -127,9 +90,10 @@ private fun TabStateInputContent(
 
 
 @Composable
-private fun TabStateDoneContent(
+private fun PageLoadedContent(
     events: (TabEvent) -> Unit,
-    pageState: PageState
+    pageState: PageState,
+    pageEvents: EventFlow<PageEvent>
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -186,7 +150,7 @@ private fun TabStateDoneContent(
             Text(pageState.message)
         }
 
-        is PageState.Input -> TabStateInputContent(pageState)
+        is PageState.Input -> PageInputContent(pageState, pageEvents)
         PageState.Loading -> Box(Modifier.fillMaxSize()) {
             CircularProgressIndicator(Modifier.align(Alignment.Center))
         }

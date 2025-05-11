@@ -1,5 +1,7 @@
 package ios.silv.gemclient.dependency
 
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
@@ -10,12 +12,15 @@ import dev.zacsweers.metro.Provider
 import dev.zacsweers.metro.SingleIn
 import dev.zacsweers.metro.binding
 import dev.zacsweers.metro.createGraphFactory
+import ios.silv.gemclient.ui.UiEvent
+import ios.silv.gemclient.ui.UiState
+import kotlin.reflect.KClass
 
 /**
  * A [ViewModelProvider.Factory] that uses an injected map of [KClass] to [Provider] of [ViewModel]
  * to create ViewModels.
  */
-@ContributesBinding(AppScope::class, binding<ViewModelProvider.Factory>())
+@ContributesBinding(AppScope::class)
 @Inject
 class MetroViewModelFactory(
     private val appGraph: AppGraph,
@@ -29,6 +34,37 @@ class MetroViewModelFactory(
 
         val provider =
             viewModelGraph.viewModelProviders[modelClass.kotlin]
+                ?: throw IllegalArgumentException("Unknown model class $modelClass")
+
+        @Suppress("NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
+        return modelClass.cast(provider())
+    }
+}
+
+val LocalMetroPresenterFactory = staticCompositionLocalOf<PresenterFactory> { error("") }
+
+interface PresenterFactory {
+    fun <T: Presenter> create(modelClass: Class<T>): T
+}
+
+/**
+ * A [ViewModelProvider.Factory] that uses an injected map of [KClass] to [Provider] of [ViewModel]
+ * to create ViewModels.
+ */
+@ContributesBinding(AppScope::class)
+@Inject
+class MetroPresenterFactory(
+    private val appGraph: AppGraph,
+): PresenterFactory {
+    override fun <T : Presenter> create(modelClass: Class<T>): T {
+        val presenterGraph = createGraphFactory<PresenterGraph.Factory>()
+            .create(appGraph)
+
+
+        println(presenterGraph.presenterProviders)
+
+        val provider =
+            presenterGraph.presenterProviders[modelClass.kotlin]
                 ?: throw IllegalArgumentException("Unknown model class $modelClass")
 
         @Suppress("NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
