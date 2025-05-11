@@ -9,94 +9,72 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import ios.silv.gemclient.R
 
-val SamsungSansSharp = FontFamily(
-    Font(R.font.samsungsharpsans, weight = FontWeight.Normal),
-    Font(R.font.samsungsharpsans, weight = FontWeight.Light),
-    Font(R.font.samsungsharpsans, weight = FontWeight.Thin),
-    Font(R.font.samsungsharpsans, weight = FontWeight.ExtraLight),
-    Font(R.font.samsungsharpsans, weight = FontWeight.ExtraLight),
-    Font(R.font.samsungsharpsans_bold, weight = FontWeight.Bold),
-    Font(R.font.samsungsharpsans_bold, weight = FontWeight.ExtraBold),
-    Font(R.font.samsungsharpsans_medium, weight = FontWeight.SemiBold),
-    Font(R.font.samsungsharpsans_medium, weight = FontWeight.Medium)
+//val SamsungSharpSans = FontFamily(
+//    Font(R.font.samsungsharpsans, weight = FontWeight.Normal),
+//    Font(R.font.samsungsharpsans, weight = FontWeight.Light),
+//    Font(R.font.samsungsharpsans, weight = FontWeight.Thin),
+//    Font(R.font.samsungsharpsans, weight = FontWeight.ExtraLight),
+//    Font(R.font.samsungsharpsans, weight = FontWeight.ExtraLight),
+//    Font(R.font.samsungsharpsans_bold, weight = FontWeight.Bold),
+//    Font(R.font.samsungsharpsans_bold, weight = FontWeight.ExtraBold),
+//    Font(R.font.samsungsharpsans_medium, weight = FontWeight.SemiBold),
+//    Font(R.font.samsungsharpsans_medium, weight = FontWeight.Medium)
+//)
+
+private val DMMono = FontFamily(
+    Font(R.font.dm_mono_regular, weight = FontWeight.Normal),
+    Font(R.font.dm_mono_light, weight = FontWeight.Light),
+    Font(R.font.dm_mono_medium, weight = FontWeight.Medium),
+    Font(R.font.dm_mono_light_italic, weight = FontWeight.Light, style = FontStyle.Italic),
+    Font(R.font.dm_mono_medium_italic, weight = FontWeight.Medium, style = FontStyle.Italic)
 )
 
 private val defaultTypography = Typography()
 
-val Typography = Typography().copy(
+val Typography = defaultTypography.copy(
     displayLarge = defaultTypography.displayLarge.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 34.sp,
-        lineHeight = 44.sp
+        fontFamily = DMMono
     ),
     displayMedium = defaultTypography.displayMedium.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 28.sp,
-        lineHeight = 36.sp
+        fontFamily = DMMono
     ),
     displaySmall = defaultTypography.displaySmall.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 24.sp,
-        lineHeight = 32.sp
+        fontFamily = DMMono
     ),
     headlineLarge = defaultTypography.headlineLarge.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 22.sp,
-        lineHeight = 30.sp
+        fontFamily = DMMono
     ),
     headlineMedium = defaultTypography.headlineMedium.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 20.sp,
-        lineHeight = 28.sp
+        fontFamily = DMMono
     ),
     headlineSmall = defaultTypography.headlineSmall.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 18.sp,
-        lineHeight = 26.sp
+        fontFamily = DMMono
     ),
     titleLarge = defaultTypography.titleLarge.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 18.sp,
-        lineHeight = 26.sp
+        fontFamily = DMMono
     ),
     titleMedium = defaultTypography.titleMedium.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 16.sp,
-        lineHeight = 24.sp
+        fontFamily = DMMono
     ),
     titleSmall = defaultTypography.titleSmall.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 14.sp,
-        lineHeight = 22.sp
+        fontFamily = DMMono
     ),
     bodyLarge = defaultTypography.bodyLarge.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 16.sp,
-        lineHeight = 24.sp
+        fontFamily = DMMono
     ),
     bodyMedium = defaultTypography.bodyMedium.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 14.sp,
-        lineHeight = 22.sp
+        fontFamily = DMMono
     ),
     bodySmall = defaultTypography.bodySmall.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 12.sp,
-        lineHeight = 18.sp
+        fontFamily = DMMono
     ),
     labelLarge = defaultTypography.labelLarge.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 14.sp,
-        lineHeight = 20.sp
+        fontFamily = DMMono
     ),
     labelMedium = defaultTypography.labelMedium.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 12.sp,
-        lineHeight = 18.sp
+        fontFamily = DMMono
     ),
     labelSmall = defaultTypography.labelSmall.copy(
-        fontFamily = SamsungSansSharp,
-        fontSize = 10.sp,
-        lineHeight = 16.sp
+        fontFamily = DMMono
     ),
 )

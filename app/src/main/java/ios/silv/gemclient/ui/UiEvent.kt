@@ -48,21 +48,21 @@ interface UiState
 
 @OptIn(ExperimentalForInheritanceCoroutinesApi::class)
 @Stable
-class EventFlow<T>(
+class EventFlow<T: UiEvent>(
     replay: Int = 0,
     extraBufferCapacity: Int = 0,
     onBufferOverflow: BufferOverflow = BufferOverflow.SUSPEND
 ): MutableSharedFlow<T> by MutableSharedFlow(replay, extraBufferCapacity, onBufferOverflow)
 
 @Composable
-fun <T> rememberEventFlow(): EventFlow<T> {
+fun <T: UiEvent> rememberEventFlow(): EventFlow<T> {
     return remember {
         EventFlow(extraBufferCapacity = 20)
     }
 }
 
 @Composable
-fun <EVENT> EventEffect(
+fun <EVENT: UiEvent> EventEffect(
     eventFlow: EventFlow<EVENT>,
     block: suspend CoroutineScope.(EVENT) -> Unit,
 ) {

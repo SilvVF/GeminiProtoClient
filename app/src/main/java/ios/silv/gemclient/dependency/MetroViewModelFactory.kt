@@ -5,6 +5,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.navigation.NavController
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
@@ -44,7 +45,7 @@ class MetroViewModelFactory(
 val LocalMetroPresenterFactory = staticCompositionLocalOf<PresenterFactory> { error("") }
 
 interface PresenterFactory {
-    fun <T: Presenter> create(modelClass: Class<T>): T
+    fun <T: Presenter> create(modelClass: Class<T>, navController: NavController): T
 }
 
 /**
@@ -56,10 +57,9 @@ interface PresenterFactory {
 class MetroPresenterFactory(
     private val appGraph: AppGraph,
 ): PresenterFactory {
-    override fun <T : Presenter> create(modelClass: Class<T>): T {
+    override fun <T : Presenter> create(modelClass: Class<T>, navController: NavController): T {
         val presenterGraph = createGraphFactory<PresenterGraph.Factory>()
-            .create(appGraph)
-
+            .create(appGraph, navController)
 
         println(presenterGraph.presenterProviders)
 

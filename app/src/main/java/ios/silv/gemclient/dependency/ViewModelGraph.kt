@@ -10,6 +10,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metro.Extends
 import dev.zacsweers.metro.Multibinds
@@ -57,6 +60,7 @@ interface PresenterGraph {
     fun interface Factory {
         fun create(
             @Extends appGraph: AppGraph,
+            @Provides navController: NavController,
         ): PresenterGraph
     }
 }

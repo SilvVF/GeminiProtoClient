@@ -1,6 +1,7 @@
 package ios.silv.gemclient
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.FloatRange
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.EaseInOutSine
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridItemScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -36,6 +38,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material3.CardColors
@@ -45,6 +48,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
@@ -58,38 +62,50 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.core.view.HapticFeedbackConstantsCompat
 import androidx.core.view.ViewCompat
-import androidx.navigation.NavBackStackEntry
-import androidx.navigation.toRoute
 import ios.silv.core_android.log.logcat
-import ios.silv.gemclient.MainTabEvent.*
-import ios.silv.gemclient.ui.components.CloseIconButton
-import ios.silv.gemclient.ui.components.FadingEndText
+import ios.silv.gemclient.bar.BarEvent
+import ios.silv.gemclient.bar.BarEvent.CreateBlankTab
+import ios.silv.gemclient.bar.BarEvent.CreateNewPage
+import ios.silv.gemclient.bar.BarEvent.CreateNewTab
+import ios.silv.gemclient.bar.BarEvent.DeleteTab
+import ios.silv.gemclient.bar.BarEvent.GoToTab
+import ios.silv.gemclient.bar.BarEvent.ReorderTabs
+import ios.silv.gemclient.bar.BarEvent.SearchChanged
+import ios.silv.gemclient.bar.BarState
+import ios.silv.gemclient.ui.EventFlow
 import ios.silv.gemclient.ui.conditional
-import ios.silv.gemclient.ui.isImeVisibleAsState
 import ios.silv.gemclient.ui.nonGoogleRetardProgress
 import ios.silv.sqldelight.Page
 import ios.silv.sqldelight.Tab
@@ -107,10 +123,10 @@ val LocalBarMode =
     compositionLocalOf<MutableTransitionState<BarMode>> { error("not provided in scope") }
 
 @Composable
-fun GeminiBasePage(
-    state: MainState,
+fun BottombarScaffold(
+    state: BarState,
+    events: EventFlow<BarEvent>,
     modifier: Modifier = Modifier,
-    backStackEntry: NavBackStackEntry? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
 
@@ -122,41 +138,20 @@ fun GeminiBasePage(
         lazyGridState,
     ) { from, to ->
         logcat { "reordering $from, $to" }
-        state.eventSink(ReorderTabs(from.index, to.index))
+        events.tryEmit(ReorderTabs(from.index, to.index))
     }
 
-    val ime by isImeVisibleAsState()
-
-    val activeTab by remember(backStackEntry) {
-        derivedStateOf {
-            runCatching {
-                backStackEntry?.toRoute<GeminiTab>()
-            }
-                .getOrNull()
-        }
-    }
-
-    val barMode = remember { MutableTransitionState(BarMode.NONE) }
     val barModeTransition = rememberTransition(
-        transitionState = barMode,
+        transitionState = state.barMode,
         label = "bar-mode-search-transition"
     )
 
-    LaunchedEffect(ime) {
-        barMode.targetState = if (ime) {
-            BarMode.SEARCHING
-        } else {
-            BarMode.NONE
-        }
-    }
-
     BackHandler(
-        enabled = barMode.currentState != BarMode.NONE
+        enabled = state.barMode.currentState != BarMode.NONE
     ) {
         focusManager.clearFocus()
-        barMode.targetState = BarMode.NONE
+        state.barMode.targetState = BarMode.NONE
     }
-
 
     Column(modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
@@ -179,32 +174,31 @@ fun GeminiBasePage(
                                 confirmValueChange = {
                                     when (it) {
                                         SwipeToDismissBoxValue.StartToEnd,
-                                        SwipeToDismissBoxValue.EndToStart-> {
-                                            state.eventSink(
+                                        SwipeToDismissBoxValue.EndToStart -> {
+                                            events.tryEmit(
                                                 DeleteTab(tab.tid)
                                             )
                                             true
                                         }
+
                                         SwipeToDismissBoxValue.Settled -> false
                                     }
                                 }
                             )
-                            val isTop = activeTab?.id == tab.tid
+                            val isTop = state.activeTab?.id == tab.tid
 
                             TabPreviewItem(
                                 reorderableLazyGridState = reorderableLazyGridState,
                                 swipeToDismissState = swipeToDismissState,
                                 isTop = isTop,
                                 onClose = {
-                                    state.eventSink(
+                                    events.tryEmit(
                                         DeleteTab(tab.tid)
                                     )
                                 },
                                 onSelected = {
-                                    state.eventSink(
-                                        GoToTab(tab)
-                                    )
-                                    barMode.targetState = BarMode.NONE
+                                    events.tryEmit(GoToTab(tab))
+                                    state.barMode.targetState = BarMode.NONE
                                 },
                                 tab = tab,
                                 activePage = activePage,
@@ -214,7 +208,7 @@ fun GeminiBasePage(
                     }
                 } else {
                     CompositionLocalProvider(
-                        LocalBarMode provides barMode
+                        LocalBarMode provides state.barMode
                     ) {
                         content()
                     }
@@ -226,7 +220,7 @@ fun GeminiBasePage(
             ) {
                 FloatingActionButton(
                     onClick = {
-                        state.eventSink(CreateBlankTab)
+                        events.tryEmit(CreateBlankTab)
                     },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -241,35 +235,53 @@ fun GeminiBasePage(
                 )
             }
         }
-        BottomSearchBar(
-            barModeTransition = barModeTransition,
-            modifier = Modifier.fillMaxWidth(),
-            focusRequester = focusRequester,
-            onFocusChanged = { state ->
-                if (state.hasFocus) {
-                    barMode.targetState = BarMode.SEARCHING
+        AnimatedVisibility(state.showSearchbar, Modifier.fillMaxWidth().wrapContentHeight()) {
+            BottomSearchBar(
+                barModeTransition = barModeTransition,
+                modifier = Modifier.fillMaxWidth(),
+                focusRequester = focusRequester,
+                onFocusChanged = { focusState ->
+                    if (focusState.hasFocus) {
+                        state.barMode.targetState = BarMode.SEARCHING
+                    }
+                },
+                searchText = state.query,
+                onTextChanged = {
+                    events.tryEmit(SearchChanged(it))
+                },
+                tabsCount = state.tabs.size,
+                onSearch = {
+                    val tab = state.activeTab
+                    if (tab != null) {
+                        events.tryEmit(CreateNewPage(tab.id))
+                    } else {
+                        events.tryEmit(CreateNewTab)
+                    }
+                },
+                toggleEditing = {
+                    state.barMode.targetState = if (state.barMode.currentState == BarMode.EDITING) {
+                        BarMode.NONE
+                    } else {
+                        BarMode.EDITING
+                    }
                 }
-            },
-            searchText = state.query,
-            onTextChanged = {
-                state.eventSink(SearchChanged(it))
-            },
-            tabsCount = state.tabs.size,
-            onSearch = {
-               val tab = activeTab
-                if (tab != null) {
-                    state.eventSink(CreateNewPage(tab.id))
-                } else {
-                    state.eventSink(CreateNewTab)
-                }
-            },
-            toggleEditing = {
-                barMode.targetState = if (barMode.currentState == BarMode.EDITING) {
-                    BarMode.NONE
-                } else {
-                    BarMode.EDITING
-                }
-            }
+            )
+        }
+    }
+}
+
+@Composable
+private fun CloseIconButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = modifier
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Close,
+            contentDescription = stringResource(R.string.close)
         )
     }
 }
@@ -475,4 +487,57 @@ private fun BottomSearchBar(
             }
         }
     }
+}
+
+@Composable
+fun FadingEndText(
+    text: String,
+    modifier: Modifier = Modifier,
+    fadeColor: Color = MaterialTheme.colorScheme.surface,
+    @FloatRange(from = 0.0, to = 1.0) fadeStartPct: Float = 0.6f,
+    color: Color = Color.Unspecified,
+    fontSize: TextUnit = TextUnit.Unspecified,
+    fontStyle: FontStyle? = null,
+    fontWeight: FontWeight? = null,
+    fontFamily: FontFamily? = null,
+    letterSpacing: TextUnit = TextUnit.Unspecified,
+    textDecoration: TextDecoration? = null,
+    textAlign: TextAlign? = null,
+    lineHeight: TextUnit = TextUnit.Unspecified,
+    overflow: TextOverflow = TextOverflow.Clip,
+    softWrap: Boolean = true,
+    maxLines: Int = Int.MAX_VALUE,
+    minLines: Int = 1,
+    onTextLayout: ((TextLayoutResult) -> Unit)? = null,
+    style: TextStyle = LocalTextStyle.current
+) {
+    Text(
+        text = text,
+        color = color,
+        fontSize = fontSize,
+        fontStyle = fontStyle,
+        fontWeight = fontWeight,
+        fontFamily = fontFamily,
+        letterSpacing = letterSpacing,
+        textDecoration = textDecoration,
+        textAlign = textAlign,
+        lineHeight = lineHeight,
+        overflow = overflow,
+        softWrap = softWrap,
+        maxLines = maxLines,
+        minLines = minLines,
+        onTextLayout = onTextLayout,
+        style = style,
+        modifier = modifier.drawWithContent {
+            drawContent()
+            drawRect(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(Color.Transparent, fadeColor),
+                    startX = size.width * fadeStartPct,
+                    endX = size.width
+                ),
+                size = size
+            )
+        }
+    )
 }

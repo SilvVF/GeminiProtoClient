@@ -8,12 +8,14 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import ios.silv.gemclient.base.LocalNavController
 import ios.silv.gemclient.ui.UiEvent
 import ios.silv.gemclient.ui.UiState
 
 @Composable
 inline fun <reified P: Presenter> metroPresenter(): P {
-    return metroPresenterProviderFactory().create(P::class.java)
+    val navController = LocalNavController.current
+    return metroPresenterProviderFactory().create(P::class.java, navController)
 }
 
 @Composable

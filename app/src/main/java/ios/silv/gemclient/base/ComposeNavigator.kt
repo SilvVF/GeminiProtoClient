@@ -2,6 +2,8 @@ package ios.silv.gemclient.base
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.navigation.NavController
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
 import ios.silv.core_android.log.logcat
 import ios.silv.gemclient.TopLevelDest
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +32,7 @@ import kotlin.coroutines.suspendCoroutine
  *  Default provided for convince in previews
  */
 val LocalNavigator = staticCompositionLocalOf<ComposeNavigator> { error("") }
+val LocalNavController = staticCompositionLocalOf<NavHostController> { error("") }
 
 typealias NavCmd = NavController.() -> Unit
 
@@ -47,14 +50,14 @@ class ComposeNavigator {
     // and still get the navigation result later
     val navControllerFlow = MutableStateFlow<NavController?>(null)
 
-    suspend fun handleNavigationCommands(scope: CoroutineScope, navController: NavController) {
+    suspend fun CoroutineScope.handleNavigationCommands(navController: NavController) {
         navControllerFlow.value = navController
         logcat { "set controller" }
         navCmds.onEach { cmd ->
             logcat { "sending nav command $cmd" }
             navController.cmd()
         }
-            .launchIn(scope)
+            .launchIn(this)
 
         topLevelDest.onEach { dest ->
             logcat { "sending nav command $dest" }
@@ -67,7 +70,7 @@ class ComposeNavigator {
                 launchSingleTop = true
             }
         }
-            .launchIn(scope)
+            .launchIn(this)
 
         try {
             awaitCancellation()

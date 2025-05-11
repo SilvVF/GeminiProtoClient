@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -21,20 +22,23 @@ import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.binding
+import ios.silv.gemclient.bar.BarEvent
+import ios.silv.gemclient.bar.BarPresenter
 import ios.silv.gemclient.base.ComposeNavigator
+import ios.silv.gemclient.base.LocalNavController
 import ios.silv.gemclient.base.LocalNavigator
 import ios.silv.gemclient.dependency.ActivityKey
 import ios.silv.gemclient.dependency.LocalMetroPresenterFactory
 import ios.silv.gemclient.dependency.PresenterFactory
-import ios.silv.gemclient.dependency.metroViewModel
+import ios.silv.gemclient.dependency.metroPresenter
 import ios.silv.gemclient.home.geminiHomeDestination
 import ios.silv.gemclient.tab.geminiTabDestination
+import ios.silv.gemclient.ui.rememberEventFlow
 import ios.silv.gemclient.ui.theme.GemClientTheme
 import kotlinx.coroutines.launch
 
@@ -51,6 +55,31 @@ class MainActivity(
     override val defaultViewModelProviderFactory: ViewModelProvider.Factory
         get() = viewModelFactory
 
+    @Composable
+    private fun GeminiCompositionLocals(content: @Composable () -> Unit) {
+        val navController = rememberNavController()
+        val scope = rememberCoroutineScope()
+
+        LifecycleStartEffect(navController) {
+            val job = scope.launch {
+                with(navigator) {
+                    handleNavigationCommands(navController)
+                }
+            }
+            onStopOrDispose {
+                job.cancel()
+            }
+        }
+
+        CompositionLocalProvider(
+            LocalNavigator provides navigator,
+            LocalNavController provides navController,
+            LocalMetroPresenterFactory provides presenterFactory
+        ) {
+            content()
+        }
+    }
+
     @SuppressLint("RestrictedApi")
     override fun onCreate(savedInstanceState: Bundle?) {
 
@@ -58,37 +87,22 @@ class MainActivity(
         enableEdgeToEdge()
         // GeminiTab("gemini://gemini.circumlunar.space/docs/specification.gmi")
         setContent {
+            GeminiCompositionLocals {
+                GemClientTheme {
+                    Surface {
 
-            val navController = rememberNavController()
-            val scope = rememberCoroutineScope()
+                        val navController = LocalNavController.current
+                        val barPresenter = metroPresenter<BarPresenter>()
 
-            LifecycleStartEffect(navController) {
-                val job = scope.launch {
-                    navigator.handleNavigationCommands(this, navController)
-                }
-                onStopOrDispose {
-                    job.cancel()
-                }
-            }
+                        val events = rememberEventFlow<BarEvent>()
+                        val barState = barPresenter.present(events)
 
-            GemClientTheme {
-                Surface {
-                    CompositionLocalProvider(
-                        LocalNavigator provides navigator,
-                        LocalMetroPresenterFactory provides presenterFactory
-                    ) {
-
-                        val backStackEntry by navController.currentBackStackEntryAsState()
-                        val bottomBarViewModel = metroViewModel<BasePageViewModel>()
-
-                        val bottomBarState by bottomBarViewModel.state.collectAsStateWithLifecycle()
-
-                        GeminiBasePage(
-                            state = bottomBarState,
-                            backStackEntry = backStackEntry
+                        BottombarScaffold(
+                            state = barState,
+                            events = events,
                         ) {
                             NavHost(
-                                navController,
+                                navController = navController,
                                 startDestination = GeminiHome,
                             ) {
                                 geminiHomeDestination()
