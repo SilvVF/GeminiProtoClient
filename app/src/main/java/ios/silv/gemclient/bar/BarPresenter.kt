@@ -18,7 +18,6 @@ import dev.zacsweers.metro.Inject
 import io.github.takahirom.rin.rememberRetained
 import ios.silv.core_android.log.logcat
 import ios.silv.database_android.dao.TabsRepo
-import ios.silv.gemclient.BarMode
 import ios.silv.gemclient.GeminiHome
 import ios.silv.gemclient.GeminiTab
 import ios.silv.gemclient.base.ComposeNavigator
@@ -27,7 +26,6 @@ import ios.silv.gemclient.dependency.PresenterKey
 import ios.silv.gemclient.dependency.PresenterScope
 import ios.silv.gemclient.ui.EventEffect
 import ios.silv.gemclient.ui.EventFlow
-import ios.silv.gemclient.ui.isImeVisibleAsState
 import ios.silv.sqldelight.Page
 import ios.silv.sqldelight.Tab
 import kotlinx.coroutines.flow.catch
@@ -67,7 +65,7 @@ class BarPresenter(
 
         var query by rememberRetained { mutableStateOf("") }
 
-        var orderedTabs = rememberRetained {
+        val orderedTabs = rememberRetained {
             mutableStateListOf<Pair<Tab, Page?>>()
         }
 
@@ -82,15 +80,6 @@ class BarPresenter(
         }
 
         val barMode = rememberRetained { MutableTransitionState(BarMode.NONE) }
-        val ime by isImeVisibleAsState()
-
-        LaunchedEffect(ime) {
-            barMode.targetState = if (ime) {
-                BarMode.SEARCHING
-            } else {
-                BarMode.NONE
-            }
-        }
 
         if (visibleTab != null) {
             LaunchedEffect(visibleTab) {

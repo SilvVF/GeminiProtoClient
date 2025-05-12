@@ -13,13 +13,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LifecycleStartEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -29,6 +27,7 @@ import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.binding
 import ios.silv.gemclient.bar.BarEvent
 import ios.silv.gemclient.bar.BarPresenter
+import ios.silv.gemclient.bar.BottombarScaffold
 import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.base.LocalNavController
 import ios.silv.gemclient.base.LocalNavigator

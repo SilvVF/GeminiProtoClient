@@ -2,14 +2,8 @@ package ios.silv.gemclient.tab
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -18,11 +12,10 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
-import ios.silv.gemclient.BarMode
+import ios.silv.gemclient.bar.BarMode
 import ios.silv.gemclient.GeminiTab
-import ios.silv.gemclient.LocalBarMode
+import ios.silv.gemclient.bar.LocalBarMode
 import ios.silv.gemclient.dependency.metroViewModel
-import ios.silv.gemclient.ui.EventFlow
 
 fun NavGraphBuilder.geminiTabDestination() {
     composable<GeminiTab> {

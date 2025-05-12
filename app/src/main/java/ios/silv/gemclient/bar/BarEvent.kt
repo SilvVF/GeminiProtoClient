@@ -1,6 +1,5 @@
 package ios.silv.gemclient.bar
 
-import ios.silv.gemclient.BarMode
 import ios.silv.gemclient.ui.UiEvent
 import ios.silv.sqldelight.Tab
 

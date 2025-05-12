@@ -1,9 +1,10 @@
-package ios.silv.gemclient
+package ios.silv.gemclient.bar
 
 import androidx.activity.compose.BackHandler
 import androidx.annotation.FloatRange
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.EaseInOutSine
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Transition
@@ -19,17 +20,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridItemScope
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -47,22 +51,22 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxState
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberSwipeToDismissBoxState
-import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,8 +79,10 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextLayoutResult
@@ -95,7 +101,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.HapticFeedbackConstantsCompat
 import androidx.core.view.ViewCompat
 import ios.silv.core_android.log.logcat
-import ios.silv.gemclient.bar.BarEvent
+import ios.silv.gemclient.R
 import ios.silv.gemclient.bar.BarEvent.CreateBlankTab
 import ios.silv.gemclient.bar.BarEvent.CreateNewPage
 import ios.silv.gemclient.bar.BarEvent.CreateNewTab
@@ -103,9 +109,10 @@ import ios.silv.gemclient.bar.BarEvent.DeleteTab
 import ios.silv.gemclient.bar.BarEvent.GoToTab
 import ios.silv.gemclient.bar.BarEvent.ReorderTabs
 import ios.silv.gemclient.bar.BarEvent.SearchChanged
-import ios.silv.gemclient.bar.BarState
 import ios.silv.gemclient.ui.EventFlow
+import ios.silv.gemclient.ui.components.TerminalSection
 import ios.silv.gemclient.ui.conditional
+import ios.silv.gemclient.ui.isImeVisibleAsState
 import ios.silv.gemclient.ui.nonGoogleRetardProgress
 import ios.silv.sqldelight.Page
 import ios.silv.sqldelight.Tab
@@ -153,6 +160,17 @@ fun BottombarScaffold(
         state.barMode.targetState = BarMode.NONE
     }
 
+    val ime by isImeVisibleAsState()
+
+    LaunchedEffect(ime) {
+        state.barMode.targetState = if (ime) {
+            BarMode.SEARCHING
+        } else {
+            BarMode.NONE
+        }
+    }
+
+
     Column(modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
             barModeTransition.AnimatedContent(
@@ -162,50 +180,12 @@ fun BottombarScaffold(
                 }
             ) { mode ->
                 if (mode == BarMode.EDITING) {
-                    val colors = CardDefaults.elevatedCardColors()
-                    LazyVerticalGrid(
-                        modifier = Modifier.fillMaxSize(),
-                        state = lazyGridState,
-                        columns = GridCells.Fixed(2),
-                        contentPadding = WindowInsets.systemBars.asPaddingValues(),
-                    ) {
-                        items(state.tabs, { it.first.tid }) { (tab, activePage) ->
-                            val swipeToDismissState = rememberSwipeToDismissBoxState(
-                                confirmValueChange = {
-                                    when (it) {
-                                        SwipeToDismissBoxValue.StartToEnd,
-                                        SwipeToDismissBoxValue.EndToStart -> {
-                                            events.tryEmit(
-                                                DeleteTab(tab.tid)
-                                            )
-                                            true
-                                        }
-
-                                        SwipeToDismissBoxValue.Settled -> false
-                                    }
-                                }
-                            )
-                            val isTop = state.activeTab?.id == tab.tid
-
-                            TabPreviewItem(
-                                reorderableLazyGridState = reorderableLazyGridState,
-                                swipeToDismissState = swipeToDismissState,
-                                isTop = isTop,
-                                onClose = {
-                                    events.tryEmit(
-                                        DeleteTab(tab.tid)
-                                    )
-                                },
-                                onSelected = {
-                                    events.tryEmit(GoToTab(tab))
-                                    state.barMode.targetState = BarMode.NONE
-                                },
-                                tab = tab,
-                                activePage = activePage,
-                                colors = colors
-                            )
-                        }
-                    }
+                    TabReorderGrid(
+                        state = state,
+                        events = events,
+                        lazyGridState = lazyGridState,
+                        reorderableLazyGridState = reorderableLazyGridState
+                    )
                 } else {
                     CompositionLocalProvider(
                         LocalBarMode provides state.barMode
@@ -283,6 +263,59 @@ private fun CloseIconButton(
             imageVector = Icons.Filled.Close,
             contentDescription = stringResource(R.string.close)
         )
+    }
+}
+
+@Composable
+private fun TabReorderGrid(
+    state: BarState,
+    events: EventFlow<BarEvent>,
+    reorderableLazyGridState: ReorderableLazyGridState,
+    lazyGridState: LazyGridState,
+) {
+    val colors = CardDefaults.elevatedCardColors()
+    LazyVerticalGrid(
+        modifier = Modifier.fillMaxSize(),
+        state = lazyGridState,
+        columns = GridCells.Fixed(2),
+        contentPadding = WindowInsets.systemBars.asPaddingValues(),
+    ) {
+        items(state.tabs, { it.first.tid }) { (tab, activePage) ->
+            val swipeToDismissState = rememberSwipeToDismissBoxState(
+                confirmValueChange = {
+                    when (it) {
+                        SwipeToDismissBoxValue.StartToEnd,
+                        SwipeToDismissBoxValue.EndToStart -> {
+                            events.tryEmit(
+                                DeleteTab(tab.tid)
+                            )
+                            true
+                        }
+
+                        SwipeToDismissBoxValue.Settled -> false
+                    }
+                }
+            )
+            val isTop = state.activeTab?.id == tab.tid
+
+            TabPreviewItem(
+                reorderableLazyGridState = reorderableLazyGridState,
+                swipeToDismissState = swipeToDismissState,
+                isTop = isTop,
+                onClose = {
+                    events.tryEmit(
+                        DeleteTab(tab.tid)
+                    )
+                },
+                onSelected = {
+                    events.tryEmit(GoToTab(tab))
+                    state.barMode.targetState = BarMode.NONE
+                },
+                tab = tab,
+                activePage = activePage,
+                colors = colors
+            )
+        }
     }
 }
 
@@ -385,105 +418,145 @@ private fun BottomSearchBar(
     tabsCount: Int,
     toggleEditing: () -> Unit
 ) {
-    Surface(
+    Box(
         modifier = modifier,
-        color = MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp),
     ) {
-        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+        val layoutDirection = LocalLayoutDirection.current
+        val density = LocalDensity.current
+        val barBorder by barModeTransition.animateColor {
+            if (it == BarMode.SEARCHING) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.secondary
+        }
+        val bottombar = @Composable {
             Row(
-                modifier = Modifier.padding(
-                    bottom = with(LocalDensity.current) {
-                        WindowInsets.systemBars.getBottom(this).toDp()
-                    }
-                ),
                 horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                barModeTransition.AnimatedVisibility(
-                    visible = { it != BarMode.SEARCHING }
-                ) {
-                    IconButton(
-                        onClick = {}
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Home,
-                            contentDescription = null
-                        )
-                    }
-                }
-                TextField(
-                    modifier = Modifier
-                        .padding(4.dp)
-                        .weight(1f)
-                        .focusRequester(focusRequester)
-                        .onFocusChanged(onFocusChanged),
-                    value = searchText,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Uri,
-                        imeAction = ImeAction.Done
-                    ),
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.small,
-                    onValueChange = onTextChanged,
-                    placeholder = {
-                        Text(
-                            text = "Search or enter address",
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    },
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            onSearch(searchText)
-                        }
-                    ),
-                    colors = TextFieldDefaults.colors(
-                        unfocusedContainerColor = MaterialTheme.colorScheme.inverseOnSurface,
-                        focusedContainerColor = MaterialTheme.colorScheme.inverseOnSurface,
-                        errorContainerColor = MaterialTheme.colorScheme.inverseOnSurface,
-                        disabledContainerColor = MaterialTheme.colorScheme.inverseOnSurface,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        errorIndicatorColor = Color.Transparent,
-                    )
+                BottomBarContent(
+                    barModeTransition,
+                    focusRequester,
+                    onFocusChanged,
+                    searchText,
+                    onTextChanged,
+                    onSearch,
+                    tabsCount,
+                    toggleEditing
                 )
-                barModeTransition.AnimatedVisibility(
-                    visible = { it != BarMode.SEARCHING }
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            Modifier
-                                .minimumInteractiveComponentSize()
-                                .clip(MaterialTheme.shapes.small)
-                                .height(32.dp)
-                                .border(
-                                    2.dp,
-                                    MaterialTheme.colorScheme.onSurface,
-                                    MaterialTheme.shapes.small
-                                )
-                                .clickable { toggleEditing() }
-                                .aspectRatio(1.2f / 1f)
-                                .padding(Dp.Hairline),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "$tabsCount",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        IconButton(
-                            onClick = { }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.MoreVert,
-                                contentDescription = null
-                            )
-                        }
+            }
+        }
+        TerminalSection(
+            modifier = Modifier
+                .padding(
+                    bottom = with(density) {
+                        WindowInsets.systemBars.getBottom(density).toDp()
                     }
+                )
+                .padding(horizontal = 1.dp),
+            content = {
+                bottombar()
+            },
+            label = {
+                Surface {
+                    Text("Input")
                 }
+            },
+            borderColor = barBorder
+        )
+    }
+}
+
+@Composable
+fun RowScope.BottomBarContent(
+    barModeTransition: Transition<BarMode>,
+    focusRequester: FocusRequester,
+    onFocusChanged: (state: FocusState) -> Unit,
+    searchText: String,
+    onTextChanged: (String) -> Unit,
+    onSearch: (String) -> Unit,
+    tabsCount: Int,
+    toggleEditing: () -> Unit
+) {
+    barModeTransition.AnimatedVisibility(
+        visible = { it != BarMode.SEARCHING }
+    ) {
+        IconButton(
+            onClick = {}
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Home,
+                contentDescription = null
+            )
+        }
+    }
+    OutlinedTextField(
+        modifier = Modifier
+            .weight(1f)
+            .focusRequester(focusRequester)
+            .onFocusChanged(onFocusChanged),
+        value = searchText,
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Uri,
+            imeAction = ImeAction.Done
+        ),
+        singleLine = true,
+        shape = MaterialTheme.shapes.small,
+        onValueChange = onTextChanged,
+        placeholder = {
+            Text(
+                text = "Search or enter address",
+                style = MaterialTheme.typography.labelMedium
+            )
+        },
+        keyboardActions = KeyboardActions(
+            onDone = {
+                onSearch(searchText)
+            }
+        ),
+        colors = TextFieldDefaults.colors(
+            unfocusedContainerColor = MaterialTheme.colorScheme.inverseOnSurface,
+            focusedContainerColor = MaterialTheme.colorScheme.inverseOnSurface,
+            errorContainerColor = MaterialTheme.colorScheme.inverseOnSurface,
+            disabledContainerColor = MaterialTheme.colorScheme.inverseOnSurface,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            errorIndicatorColor = Color.Transparent,
+        )
+    )
+    barModeTransition.AnimatedVisibility(
+        visible = { it != BarMode.SEARCHING }
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier
+                    .minimumInteractiveComponentSize()
+                    .clip(MaterialTheme.shapes.small)
+                    .height(32.dp)
+                    .border(
+                        2.dp,
+                        MaterialTheme.colorScheme.onSurface,
+                        MaterialTheme.shapes.small
+                    )
+                    .clickable { toggleEditing() }
+                    .aspectRatio(1.2f / 1f)
+                    .padding(Dp.Hairline),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "$tabsCount",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            IconButton(
+                onClick = { }
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = null
+                )
             }
         }
     }

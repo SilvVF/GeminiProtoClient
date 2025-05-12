@@ -1,7 +1,6 @@
 package ios.silv.gemclient.bar
 
 import androidx.compose.animation.core.MutableTransitionState
-import ios.silv.gemclient.BarMode
 import ios.silv.gemclient.GeminiTab
 import ios.silv.gemclient.ui.UiState
 import ios.silv.sqldelight.Page

@@ -2,7 +2,9 @@ package ios.silv.gemclient.home
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -14,6 +16,7 @@ import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -21,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import ios.silv.gemclient.GeminiHome
@@ -28,6 +32,7 @@ import ios.silv.gemclient.GeminiSettings
 import ios.silv.gemclient.base.LocalNavigator
 import ios.silv.gemclient.dependency.metroPresenter
 import ios.silv.gemclient.ui.EventFlow
+import ios.silv.gemclient.ui.components.TerminalSection
 import ios.silv.gemclient.ui.rememberEventFlow
 
 fun NavGraphBuilder.geminiHomeDestination() {
@@ -88,14 +93,25 @@ private fun GeminiHomeContent(
             .fillMaxSize()
             .nestedScroll(topBarScrollBehavior.nestedScrollConnection)
     ) { paddingValues ->
-        Column(
-            Modifier
+        TerminalSection(
+            modifier = Modifier
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .fillMaxSize()
-        ) {
-            Text("HOME")
-        }
+                .padding(1.dp),
+            label = {
+                Surface {
+                    Text("Home")
+                }
+            },
+            content = {
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text("HOME")
+                }
+            }
+        )
     }
 }
 

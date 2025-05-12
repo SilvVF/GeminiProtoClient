@@ -1,9 +1,7 @@
 package ios.silv.gemclient.tab
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -16,12 +14,9 @@ import ios.silv.database_android.dao.TabsRepo
 import ios.silv.gemclient.dependency.Presenter
 import ios.silv.gemclient.dependency.PresenterKey
 import ios.silv.gemclient.dependency.PresenterScope
-import ios.silv.gemclient.tab.PageState.Content.*
+import ios.silv.gemclient.tab.PageState.Content.UiNode
 import ios.silv.gemclient.ui.EventEffect
 import ios.silv.gemclient.ui.EventFlow
-import ios.silv.gemclient.ui.UiEvent
-import ios.silv.gemclient.ui.UiState
-import ios.silv.gemini.ContentNode
 import ios.silv.gemini.GeminiClient
 import ios.silv.gemini.GeminiCode
 import ios.silv.gemini.GeminiParser
@@ -32,7 +27,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.toList
-import java.util.UUID
 
 @ContributesIntoMap(PresenterScope::class)
 @PresenterKey(PagePresenter::class)
