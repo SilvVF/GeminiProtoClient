@@ -57,6 +57,7 @@ interface PresenterFactory {
 class MetroPresenterFactory(
     private val appGraph: AppGraph,
 ): PresenterFactory {
+
     override fun <T : Presenter> create(modelClass: Class<T>, navController: NavController): T {
         val presenterGraph = createGraphFactory<PresenterGraph.Factory>()
             .create(appGraph, navController)

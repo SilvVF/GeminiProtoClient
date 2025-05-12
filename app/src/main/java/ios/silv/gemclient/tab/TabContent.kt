@@ -16,6 +16,7 @@ import ios.silv.gemclient.bar.BarMode
 import ios.silv.gemclient.GeminiTab
 import ios.silv.gemclient.bar.LocalBarMode
 import ios.silv.gemclient.dependency.metroViewModel
+import ios.silv.gemclient.ui.isImeVisibleAsState
 
 fun NavGraphBuilder.geminiTabDestination() {
     composable<GeminiTab> {
@@ -23,8 +24,11 @@ fun NavGraphBuilder.geminiTabDestination() {
 
         val state by viewModel.state.collectAsStateWithLifecycle()
         val barMode = LocalBarMode.current
+        val ime by isImeVisibleAsState()
 
-        BackHandler {
+        BackHandler(
+            enabled = !ime
+        ) {
             if (barMode.currentState != BarMode.NONE) {
                 barMode.targetState = BarMode.NONE
             } else {

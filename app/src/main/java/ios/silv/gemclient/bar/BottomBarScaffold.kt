@@ -5,6 +5,7 @@ import androidx.annotation.FloatRange
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColor
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.EaseInOutSine
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Transition
@@ -19,17 +20,29 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeContent
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridItemScope
@@ -96,8 +109,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import androidx.core.view.HapticFeedbackConstantsCompat
 import androidx.core.view.ViewCompat
 import ios.silv.core_android.log.logcat
@@ -109,8 +124,12 @@ import ios.silv.gemclient.bar.BarEvent.DeleteTab
 import ios.silv.gemclient.bar.BarEvent.GoToTab
 import ios.silv.gemclient.bar.BarEvent.ReorderTabs
 import ios.silv.gemclient.bar.BarEvent.SearchChanged
+import ios.silv.gemclient.types.StablePage
+import ios.silv.gemclient.types.StableTab
 import ios.silv.gemclient.ui.EventFlow
 import ios.silv.gemclient.ui.components.TerminalSection
+import ios.silv.gemclient.ui.components.TerminalSectionButton
+import ios.silv.gemclient.ui.components.TerminalSectionDefaults
 import ios.silv.gemclient.ui.conditional
 import ios.silv.gemclient.ui.isImeVisibleAsState
 import ios.silv.gemclient.ui.nonGoogleRetardProgress
@@ -171,7 +190,13 @@ fun BottombarScaffold(
     }
 
 
-    Column(modifier.fillMaxSize()) {
+    Column(
+        modifier
+            .fillMaxSize()
+            .windowInsetsPadding(
+                WindowInsets.safeContent.only(WindowInsetsSides.Bottom)
+            )
+    ) {
         Box(Modifier.weight(1f)) {
             barModeTransition.AnimatedContent(
                 modifier = Modifier.fillMaxSize(),
@@ -198,24 +223,32 @@ fun BottombarScaffold(
                 visible = { it == BarMode.EDITING },
                 modifier = Modifier.align(Alignment.BottomEnd)
             ) {
-                FloatingActionButton(
+                TerminalSectionButton(
+                    modifier = Modifier
+                        .padding(end = TerminalSectionDefaults.horizontalPadding)
+                        .padding(bottom = 6.dp)
+                        .width(IntrinsicSize.Min)
+                        .height(IntrinsicSize.Min),
+                    label = {
+                        TerminalSectionDefaults.Label("add")
+                    },
                     onClick = {
                         events.tryEmit(CreateBlankTab)
                     },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(12.dp),
-                    shape = CircleShape,
-                    content = {
+                ) {
+                    Box(Modifier.height(48.dp).width(92.dp), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Filled.Add,
                             contentDescription = null
                         )
                     }
-                )
+                }
             }
         }
-        AnimatedVisibility(state.showSearchbar, Modifier.fillMaxWidth().wrapContentHeight()) {
+        AnimatedVisibility(
+            visible = state.showSearchbar,
+            modifier = Modifier.fillMaxWidth().wrapContentHeight()
+        ) {
             BottomSearchBar(
                 barModeTransition = barModeTransition,
                 modifier = Modifier.fillMaxWidth(),
@@ -280,14 +313,14 @@ private fun TabReorderGrid(
         columns = GridCells.Fixed(2),
         contentPadding = WindowInsets.systemBars.asPaddingValues(),
     ) {
-        items(state.tabs, { it.first.tid }) { (tab, activePage) ->
+        items(state.tabs, { it.first.id }) { (tab, activePage) ->
             val swipeToDismissState = rememberSwipeToDismissBoxState(
                 confirmValueChange = {
                     when (it) {
                         SwipeToDismissBoxValue.StartToEnd,
                         SwipeToDismissBoxValue.EndToStart -> {
                             events.tryEmit(
-                                DeleteTab(tab.tid)
+                                DeleteTab(tab.id)
                             )
                             true
                         }
@@ -296,7 +329,7 @@ private fun TabReorderGrid(
                     }
                 }
             )
-            val isTop = state.activeTab?.id == tab.tid
+            val isTop = state.activeTab?.id == tab.id
 
             TabPreviewItem(
                 reorderableLazyGridState = reorderableLazyGridState,
@@ -304,7 +337,7 @@ private fun TabReorderGrid(
                 isTop = isTop,
                 onClose = {
                     events.tryEmit(
-                        DeleteTab(tab.tid)
+                        DeleteTab(tab.id)
                     )
                 },
                 onSelected = {
@@ -322,8 +355,8 @@ private fun TabReorderGrid(
 @Composable
 private fun LazyGridItemScope.TabPreviewItem(
     reorderableLazyGridState: ReorderableLazyGridState,
-    tab: Tab,
-    activePage: Page?,
+    tab: StableTab,
+    activePage: StablePage?,
     swipeToDismissState: SwipeToDismissBoxState,
     isTop: Boolean,
     onClose: () -> Unit,
@@ -335,7 +368,7 @@ private fun LazyGridItemScope.TabPreviewItem(
 
     ReorderableItem(
         reorderableLazyGridState,
-        key = tab.tid
+        key = tab.id
     ) {
         SwipeToDismissBox(
             swipeToDismissState,
@@ -418,50 +451,35 @@ private fun BottomSearchBar(
     tabsCount: Int,
     toggleEditing: () -> Unit
 ) {
-    Box(
-        modifier = modifier,
+    val barBorder by barModeTransition.animateColor {
+        if (it == BarMode.SEARCHING) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.secondary
+    }
+    TerminalSection(
+        modifier = modifier
+            .padding(horizontal = TerminalSectionDefaults.horizontalPadding),
+        label = {
+            TerminalSectionDefaults.Label(
+                text = "std-in"
+            )
+        },
+        borderColor = barBorder
     ) {
-        val layoutDirection = LocalLayoutDirection.current
-        val density = LocalDensity.current
-        val barBorder by barModeTransition.animateColor {
-            if (it == BarMode.SEARCHING) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.secondary
+        Row(
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BottomBarContent(
+                barModeTransition,
+                focusRequester,
+                onFocusChanged,
+                searchText,
+                onTextChanged,
+                onSearch,
+                tabsCount,
+                toggleEditing
+            )
         }
-        val bottombar = @Composable {
-            Row(
-                horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                BottomBarContent(
-                    barModeTransition,
-                    focusRequester,
-                    onFocusChanged,
-                    searchText,
-                    onTextChanged,
-                    onSearch,
-                    tabsCount,
-                    toggleEditing
-                )
-            }
-        }
-        TerminalSection(
-            modifier = Modifier
-                .padding(
-                    bottom = with(density) {
-                        WindowInsets.systemBars.getBottom(density).toDp()
-                    }
-                )
-                .padding(horizontal = 1.dp),
-            content = {
-                bottombar()
-            },
-            label = {
-                Surface {
-                    Text("Input")
-                }
-            },
-            borderColor = barBorder
-        )
     }
 }
 
@@ -513,10 +531,10 @@ fun RowScope.BottomBarContent(
             }
         ),
         colors = TextFieldDefaults.colors(
-            unfocusedContainerColor = MaterialTheme.colorScheme.inverseOnSurface,
-            focusedContainerColor = MaterialTheme.colorScheme.inverseOnSurface,
-            errorContainerColor = MaterialTheme.colorScheme.inverseOnSurface,
-            disabledContainerColor = MaterialTheme.colorScheme.inverseOnSurface,
+            unfocusedContainerColor = Color.Transparent,
+            focusedContainerColor = Color.Transparent,
+            errorContainerColor = Color.Transparent,
+            disabledContainerColor = Color.Transparent,
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
             errorIndicatorColor = Color.Transparent,

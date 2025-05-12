@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -55,8 +56,10 @@ class MainActivity(
         get() = viewModelFactory
 
     @Composable
-    private fun GeminiCompositionLocals(content: @Composable () -> Unit) {
-        val navController = rememberNavController()
+    private fun GeminiCompositionLocals(
+        navController: NavController,
+        content: @Composable () -> Unit
+    ) {
         val scope = rememberCoroutineScope()
 
         LifecycleStartEffect(navController) {
@@ -72,8 +75,8 @@ class MainActivity(
 
         CompositionLocalProvider(
             LocalNavigator provides navigator,
+            LocalMetroPresenterFactory provides presenterFactory,
             LocalNavController provides navController,
-            LocalMetroPresenterFactory provides presenterFactory
         ) {
             content()
         }
@@ -86,11 +89,12 @@ class MainActivity(
         enableEdgeToEdge()
         // GeminiTab("gemini://gemini.circumlunar.space/docs/specification.gmi")
         setContent {
-            GeminiCompositionLocals {
+
+            val navController = rememberNavController()
+
+            GeminiCompositionLocals(navController) {
                 GemClientTheme {
                     Surface {
-
-                        val navController = LocalNavController.current
                         val barPresenter = metroPresenter<BarPresenter>()
 
                         val events = rememberEventFlow<BarEvent>()

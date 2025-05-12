@@ -17,13 +17,15 @@ import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import io.github.takahirom.rin.rememberRetained
 import ios.silv.core_android.log.logcat
-import ios.silv.database_android.dao.TabsRepo
+import ios.silv.database_android.dao.TabsDao
 import ios.silv.gemclient.GeminiHome
 import ios.silv.gemclient.GeminiTab
 import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.dependency.Presenter
 import ios.silv.gemclient.dependency.PresenterKey
 import ios.silv.gemclient.dependency.PresenterScope
+import ios.silv.gemclient.types.StablePage
+import ios.silv.gemclient.types.StableTab
 import ios.silv.gemclient.ui.EventEffect
 import ios.silv.gemclient.ui.EventFlow
 import ios.silv.sqldelight.Page
@@ -36,21 +38,21 @@ import kotlinx.coroutines.flow.map
 @PresenterKey(BarPresenter::class)
 @Inject
 class BarPresenter(
-    private val tabsRepo: TabsRepo,
+    private val tabsDao: TabsDao,
     private val navigator: ComposeNavigator,
     private val navController: NavController,
 ) : Presenter {
 
     private fun updateListPreserveOrder(
-        prev: List<Pair<Tab, Page?>>,
-        new: List<Pair<Tab, Page?>>
-    ): List<Pair<Tab, Page?>> {
+        prev: List<Pair<StableTab, StablePage?>>,
+        new: List<Pair<StableTab, StablePage?>>
+    ): List<Pair<StableTab, StablePage?>> {
 
-        val newValues = new.groupBy { (tab) -> tab.tid }
-        val updated = prev.mapNotNull { (tab) -> newValues[tab.tid]?.firstOrNull() }
+        val newValues = new.groupBy { (tab) -> tab.id }
+        val updated = prev.mapNotNull { (tab) -> newValues[tab.id]?.firstOrNull() }
 
-        val updatedKeys = updated.map { (tab) -> tab.tid }.toSet()
-        val added = new.filter { (tab) -> tab.tid !in updatedKeys }
+        val updatedKeys = updated.map { (tab) -> tab.id }.toSet()
+        val added = new.filter { (tab) -> tab.id !in updatedKeys }
 
         return buildList {
             addAll(updated)
@@ -66,7 +68,7 @@ class BarPresenter(
         var query by rememberRetained { mutableStateOf("") }
 
         val orderedTabs = rememberRetained {
-            mutableStateListOf<Pair<Tab, Page?>>()
+            mutableStateListOf<Pair<StableTab, StablePage?>>()
         }
 
         val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -83,7 +85,7 @@ class BarPresenter(
 
         if (visibleTab != null) {
             LaunchedEffect(visibleTab) {
-                tabsRepo.observeTabWithActivePage(visibleTab?.id ?: return@LaunchedEffect)
+                tabsDao.observeTabWithActivePage(visibleTab?.id ?: return@LaunchedEffect)
                     .filterNotNull()
                     .collect { (_, activePage) ->
                         if (activePage != null) {
@@ -94,11 +96,23 @@ class BarPresenter(
         }
 
         LaunchedEffect(Unit) {
-            tabsRepo
+            tabsDao
                 .observeTabsWithActivePage()
                 .collect { items ->
                     logcat { "new items = $items" }
-                    val newTabs = updateListPreserveOrder(orderedTabs, items)
+                    val newTabs = updateListPreserveOrder(
+                        orderedTabs,
+                        items.map { (t, p) ->
+                            Pair(
+                                StableTab(t),
+                                if (p == null) {
+                                    null
+                                } else {
+                                    StablePage(p)
+                                }
+                            )
+                        }
+                    )
                     orderedTabs.clear()
                     orderedTabs.addAll(newTabs)
                 }
@@ -108,7 +122,7 @@ class BarPresenter(
         EventEffect(events) { event ->
             when (event) {
                 BarEvent.CreateBlankTab -> {
-                    val tab = tabsRepo.insertTab(null)
+                    val tab = tabsDao.insertTab(null)
 
                     navigator.navCmds.tryEmit {
                         navigate(GeminiTab(tab.tid))
@@ -116,11 +130,11 @@ class BarPresenter(
                 }
 
                 is BarEvent.CreateNewPage -> {
-                    tabsRepo.insertPage(event.tabId, query)
+                    tabsDao.insertPage(event.tabId, query)
                 }
 
                 BarEvent.CreateNewTab -> {
-                    val tab = tabsRepo.insertTab(query)
+                    val tab = tabsDao.insertTab(query)
 
                     navigator.navCmds.tryEmit {
                         navigate(GeminiTab(tab.tid))
@@ -128,11 +142,11 @@ class BarPresenter(
                 }
 
                 is BarEvent.DeleteTab -> {
-                    tabsRepo.deleteTab(event.id)
+                    tabsDao.deleteTab(event.id)
                 }
 
                 is BarEvent.GoToTab -> {
-                    navigator.navCmds.tryEmit { navigate(GeminiTab(id = event.tab.tid)) }
+                    navigator.navCmds.tryEmit { navigate(GeminiTab(id = event.tab.id)) }
                 }
 
                 is BarEvent.ReorderTabs -> {

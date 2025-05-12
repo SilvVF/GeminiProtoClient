@@ -21,12 +21,14 @@ sealed interface PageState : UiState {
         @Stable
         data class UiNode(
             val node: ContentNode,
-            val key: String? = UUID.randomUUID().toString(),
+            val key: String = UUID.randomUUID().toString(),
             val contentType: String = node::class.toString()
         )
     }
 
     data object Loading : PageState
     data class Error(val message: String) : PageState
+
+    val nodesOrNull get() =  (this as? Content)?.nodes
 }
 

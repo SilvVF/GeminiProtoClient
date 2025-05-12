@@ -8,12 +8,11 @@ import dev.zacsweers.metro.Multibinds
 import dev.zacsweers.metro.Provider
 import dev.zacsweers.metro.Provides
 import dev.zacsweers.metro.SingleIn
-import ios.silv.core_android.log.logcat
 import ios.silv.database.Database
 import ios.silv.database_android.DatabaseHandler
 import ios.silv.database_android.DatabaseHandlerImpl
 import ios.silv.database_android.DriverFactory
-import ios.silv.database_android.dao.TabsRepo
+import ios.silv.database_android.dao.TabsDao
 import ios.silv.gemclient.App
 import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemini.GeminiCache
@@ -45,7 +44,7 @@ abstract class AppGraph {
 
     @SingleIn(AppScope::class)
     @Provides
-    fun provideTabsRepo(databaseHandler: DatabaseHandler): TabsRepo = TabsRepo(databaseHandler)
+    fun provideTabsRepo(databaseHandler: DatabaseHandler): TabsDao = TabsDao(databaseHandler)
 
     @SingleIn(AppScope::class)
     @Provides

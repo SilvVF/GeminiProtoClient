@@ -1,16 +1,10 @@
 package ios.silv.database_android.dao
 
-import ios.silv.database.Database
 import ios.silv.database_android.DatabaseHandler
 import ios.silv.sqldelight.Page
 import ios.silv.sqldelight.Tab
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 
 internal object TabMapper {
 
@@ -27,7 +21,7 @@ internal object TabMapper {
         }
 }
 
-class TabsRepo(
+class TabsDao(
     private val databaseHandler: DatabaseHandler,
 ) {
 

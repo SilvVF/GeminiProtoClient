@@ -7,7 +7,7 @@ import androidx.compose.runtime.setValue
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import io.github.takahirom.rin.rememberRetained
-import ios.silv.database_android.dao.TabsRepo
+import ios.silv.database_android.dao.TabsDao
 import ios.silv.gemclient.GeminiTab
 import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.dependency.Presenter
@@ -21,7 +21,7 @@ import ios.silv.gemclient.ui.EventFlow
 @PresenterKey(HomePresenter::class)
 @Inject
 class HomePresenter(
-    private val tabsRepo: TabsRepo,
+    private val tabsDao: TabsDao,
     private val navigator: ComposeNavigator
 ): Presenter {
 
@@ -32,7 +32,7 @@ class HomePresenter(
         EventEffect(eventFlow) { event ->
             when (event) {
                 is HomeEvent.CreateTab -> {
-                    val tab = tabsRepo.insertTab(event.url)
+                    val tab = tabsDao.insertTab(event.url)
 
                     navigator.navCmds.emit {
                         navigate(GeminiTab(tab.tid))

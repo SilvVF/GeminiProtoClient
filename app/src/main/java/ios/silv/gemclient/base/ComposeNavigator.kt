@@ -32,7 +32,7 @@ import kotlin.coroutines.suspendCoroutine
  *  Default provided for convince in previews
  */
 val LocalNavigator = staticCompositionLocalOf<ComposeNavigator> { error("") }
-val LocalNavController = staticCompositionLocalOf<NavHostController> { error("") }
+val LocalNavController = staticCompositionLocalOf<NavController> { error("") }
 
 typealias NavCmd = NavController.() -> Unit
 

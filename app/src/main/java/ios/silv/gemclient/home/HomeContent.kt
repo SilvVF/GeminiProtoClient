@@ -1,29 +1,49 @@
 package ios.silv.gemclient.home
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
@@ -33,6 +53,8 @@ import ios.silv.gemclient.base.LocalNavigator
 import ios.silv.gemclient.dependency.metroPresenter
 import ios.silv.gemclient.ui.EventFlow
 import ios.silv.gemclient.ui.components.TerminalSection
+import ios.silv.gemclient.ui.components.TerminalSectionButton
+import ios.silv.gemclient.ui.components.TerminalSectionDefaults
 import ios.silv.gemclient.ui.rememberEventFlow
 
 fun NavGraphBuilder.geminiHomeDestination() {
@@ -55,80 +77,93 @@ private fun GeminiHomeContent(
     eventsFlow: EventFlow<HomeEvent>,
     state: HomeUiState,
 ) {
-    val topBarScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val containerColor by animateColorAsState(
+        if (state.incognito) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.background
+        },
+        label = "incog-background-color"
+    )
     Scaffold(
-        containerColor = animateColorAsState(
-            if (state.incognito) {
-                MaterialTheme.colorScheme.secondaryContainer
-            } else {
-                MaterialTheme.colorScheme.background
-            },
-            label = "incog-background-color"
-        ).value,
+        containerColor = containerColor,
         topBar = {
+            val contentColor = LocalContentColor.current
             TopAppBar(
-                scrollBehavior = topBarScrollBehavior,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = Color.Transparent
-                ),
-                title = { Text("Gemini Browser") },
+                title = {
+                    BasicText(
+                        text = "Gemini Browser >",
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        modifier = Modifier.padding(end = 4.dp),
+                        color = { contentColor },
+                        autoSize = TextAutoSize.StepBased()
+                    )
+                },
                 actions = {
                     val navigator = LocalNavigator.current
-                    Button(
+                    TerminalSectionButton(
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .width(IntrinsicSize.Min)
+                            .height(IntrinsicSize.Min),
+                        containerColor = containerColor,
+                        label = {
+                            TerminalSectionDefaults.Label("settings", color = containerColor)
+                        },
                         onClick = {
                             navigator.topLevelDest.tryEmit(GeminiSettings)
                         }
                     ) {
-                        Text("nav")
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = null,
+                        )
                     }
-                    ToggleIncognitoButton(
-                        { eventsFlow.tryEmit(HomeEvent.ToggleIncognito) },
-                        state.incognito
-                    )
+                    TerminalSectionButton(
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .width(IntrinsicSize.Min)
+                            .height(IntrinsicSize.Min),
+                        containerColor = containerColor,
+                        label = {
+                            TerminalSectionDefaults.Label("incog", color = containerColor)
+                        },
+                        onClick = {
+                            eventsFlow.tryEmit(HomeEvent.ToggleIncognito)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Lock,
+                            contentDescription = null,
+                        )
+                    }
                 }
             )
         },
-        modifier = Modifier
-            .fillMaxSize()
-            .nestedScroll(topBarScrollBehavior.nestedScrollConnection)
+        contentWindowInsets = ScaffoldDefaults.contentWindowInsets.only(
+            WindowInsetsSides.Horizontal
+        ),
+        modifier = Modifier.fillMaxSize()
     ) { paddingValues ->
         TerminalSection(
             modifier = Modifier
                 .padding(paddingValues)
-                .padding(1.dp),
+                .padding(horizontal = TerminalSectionDefaults.horizontalPadding),
             label = {
-                Surface {
-                    Text("Home")
-                }
-            },
-            content = {
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Text("HOME")
-                }
+                TerminalSectionDefaults.Label(
+                    text = "home",
+                    color = containerColor
+                )
             }
-        )
-    }
-}
-
-@Composable
-private fun ToggleIncognitoButton(
-    toggleIncognito: () -> Unit,
-    incognito: Boolean,
-) {
-    FilledIconToggleButton(
-        checked = incognito,
-        onCheckedChange = {
-            toggleIncognito()
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text("HOME")
+            }
         }
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Lock,
-            contentDescription = null,
-        )
     }
 }
