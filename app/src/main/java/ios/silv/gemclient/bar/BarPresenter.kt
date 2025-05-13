@@ -116,6 +116,7 @@ class BarPresenter(
                             StableTab(t),
                             if (p == null) {
                                 // 1
+                                // 2
                                 null
                             } else {
                                 StablePage(p)
