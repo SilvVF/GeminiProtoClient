@@ -1,10 +1,7 @@
 package ios.silv.gemini
 
-import io.ktor.utils.io.ByteReadChannel
-import io.ktor.utils.io.readUTF8LineTo
 import ios.silv.core_android.log.logcat
 import kotlinx.io.Source
-import kotlinx.io.readLine
 import kotlinx.io.readLineStrict
 import java.io.ByteArrayInputStream
 import java.io.IOException
@@ -36,7 +33,7 @@ internal fun buildTlsCertificateIfNeeded(certPEM: ByteArray, keyPEM: ByteArray):
 }
 
 @Throws(IOException::class)
-internal fun getHeader(source: Source): Result<Header> = runCatching {
+internal fun consumeHeader(source: Source): Result<Header> = runCatching {
     val line =  source.readLineStrict(4096)
 
     logcat("GeminiClient") { line }

@@ -10,6 +10,9 @@ VALUES (NULL, :active_page);
 lastInsertRowId:
 SELECT last_insert_rowid();
 
+selectTabIds:
+SELECT tid FROM Tab;
+
 deleteById:
 DELETE FROM Tab WHERE tid = :id;
 

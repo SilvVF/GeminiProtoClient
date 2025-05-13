@@ -3,49 +3,31 @@ package ios.silv.gemini
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.set
-import io.ktor.network.selector.ActorSelectorManager
 import io.ktor.network.selector.SelectorManager
 import io.ktor.network.sockets.Socket
 import io.ktor.network.sockets.aSocket
-import io.ktor.network.sockets.awaitClosed
 import io.ktor.network.sockets.openReadChannel
 import io.ktor.network.sockets.openWriteChannel
 import io.ktor.network.tls.addKeyStore
 import io.ktor.network.tls.tls
 import io.ktor.utils.io.ByteReadChannel
-import io.ktor.utils.io.ByteWriteChannel
-import io.ktor.utils.io.asSink
-import io.ktor.utils.io.asSource
-import io.ktor.utils.io.cancel
-import io.ktor.utils.io.close
-import io.ktor.utils.io.core.copy
 import io.ktor.utils.io.core.readAvailable
 import io.ktor.utils.io.core.remaining
-import io.ktor.utils.io.jvm.javaio.toByteReadChannel
-import io.ktor.utils.io.read
-import io.ktor.utils.io.readAvailable
 import io.ktor.utils.io.readRemaining
 import io.ktor.utils.io.writeString
 import ios.silv.core_android.log.LogPriority.ERROR
 import ios.silv.core_android.log.logcat
 import ios.silv.core_android.suspendRunCatching
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import kotlinx.io.Buffer
 import kotlinx.io.Source
 import kotlinx.io.asSource
 import kotlinx.io.buffered
-import kotlinx.io.readByteArray
-import kotlinx.io.writeString
+import okio.Sink
+import java.io.Closeable
 import java.io.File
 import java.security.KeyStore
 import java.security.SecureRandom
@@ -119,7 +101,12 @@ data class Response(
     val meta: String,
     val body: Source,
     val cert: X509Certificate? = null
-)
+) : Closeable {
+
+    override fun close() {
+        body.close()
+    }
+}
 
 data class Header(
     val status: Int,
@@ -139,80 +126,60 @@ class GeminiClient(
     private val cache: GeminiCache,
     private val config: ClientConfig = ClientConfig()
 ) {
-    data class Conn(val sock: Socket)
-
     private val selector = config.selector
-    private val conns = mutableMapOf<String, Conn>()
-    private val mutex = Mutex()
 
-    suspend fun makeGeminiQuery(query: String): Result<Response> {
-        return withContext(config.dispatcher) { fetch(query) }
+    suspend fun makeGeminiQuery(query: String, forceNetwork: Boolean = false): Result<Response> {
+        return withContext(config.dispatcher) { fetch(query, forceNetwork) }
     }
 
-    private suspend fun fetch(rawUrl: String): Result<Response> {
+    private suspend fun fetch(rawUrl: String, forceNetwork: Boolean = false): Result<Response> {
         return suspendRunCatching {
-            fetchWithHostAndCert(Url(rawUrl), byteArrayOf(), byteArrayOf()).getOrThrow()
+            fetchWithHostAndCert(
+                Url(rawUrl),
+                byteArrayOf(),
+                byteArrayOf(),
+                forceNetwork,
+                0
+            ).getOrThrow()
         }
     }
 
     private suspend fun readResponseFromCache(file: File, redirected: Int = 0): Result<Response> {
         return suspendRunCatching {
-            val source = file.inputStream().asSource().buffered()
+            file.inputStream().asSource().buffered().use { source ->
+                val header = consumeHeader(source).getOrThrow()
 
-            val header = getHeader(source).getOrThrow()
+                if (header.status == GeminiCode.StatusRedirectPermanent) {
+                    return@suspendRunCatching fetchWithHostAndCert(
+                        Url(header.meta),
+                        byteArrayOf(),
+                        byteArrayOf(),
+                        false,
+                        (redirected + 1)
+                    )
+                        .getOrThrow()
+                }
 
-            if (header.status == GeminiCode.StatusRedirectPermanent) {
+                if (source.remaining <= 0L) {
+                    error("empty buffer")
+                }
 
-                source.close()
+                val buffer = Buffer().apply {
+                    source.transferTo(this)
+                }
 
-                return@suspendRunCatching fetchWithHostAndCert(
-                    Url(header.meta),
-                    byteArrayOf(),
-                    byteArrayOf(),
-                    (redirected + 1)
+                Response(
+                    status = header.status,
+                    meta = header.meta,
+                    body = buffer,
+                    cert = null
                 )
-                    .getOrThrow()
             }
-
-            if (source.remaining <= 0L) {
-                source.close()
-                error("empty buffer")
-            }
-
-            Response(
-                status = header.status,
-                meta = header.meta,
-                body = source,
-                cert = null
-            )
         }
     }
 
-    private suspend fun openNewConnection(url: Url, port: Int, keystore: KeyStore?): Conn {
-        val key = "${url.host}:$port"
-        val open = conns[key]
-        // The server should have closed the connection after
-        // sending response if not try and close (no-op if closed)
-        /*
-            ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⢄⠀⣔⣄⡀⠀⣠⣄⠀⠀⠀
-            ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡼⠿⠟⢻⣿⣯⣻⣩⢞⣭⣿⣿⣶⢤⡀
-            ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠴⠚⠁⢀⣠⣾⠽⠟⠻⠿⣿⡿⠋⠡⠀⠉⠢⡑
-            ⠀⠀⠀⠀⠀⠀⠀⣀⠤⠒⠉⠀⠀⠀⠀⢻⠟⠁⠤⠒⠁⠀⢸⡄⠀⠀⠀⠀⠀⢹
-            ⠀⠀⠀⣀⡤⠖⠉⠀⠀⠀⠀⠀⠀⠀⠀⡏⠀⠀⠀⠀⠀⠀⢀⡷⡄⠀⠀⠀⢀⣼
-            ⠀⡠⠚⠁⠀⠀⠀⠀⠀⠀⠀⠀⠸⣦⡀⠳⣄⡀⠀⠀⣀⡞⠋⠋⠻⣦⣤⠴⠚⠉
-            ⡾⠁⢀⡖⢁⡤⠔⠒⠒⠒⠒⠦⢤⣀⣉⣓⠚⠛⠋⠉⠀⡇⠀⠀⠀⣟⢀⣀⠤⢾
-            ⣇⠀⢸⢠⡏⠀⠀⠛⠓⠒⠶⠶⠤⢤⣄⣉⣉⣉⠛⠛⣿⠁⠀⠀⠀⢸⣁⣀⡤⠋
-            ⣿⢦⡀⠀⠙⠒⠒⠒⠒⠒⠲⠦⢤⣤⣀⣀⣉⣉⣉⣉⡿⠀⠀⠀⠀⠸⣏⣩⢷⠿
-            ⠛⢦⣵⣤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⢉⡇⠀⠀⠀⠀⠀⢻⡷⠁⠀
-            ⠀⠀⠈⠉⠛⠳⠶⣤⣤⣤⣤⣤⣤⣀⣀⣀⣠⣶⣊⡿⠀⠀⠀⠀⠀⠀⠀⢣⡤⠤
-            ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⣉⣉⣉⠉⠀⠀⢻⡄⠀⠀⠀⠀⠀⠀⠀⣸⠃⠀
-            DON'T TIMEOUT
-         */
-        withTimeout(SOCKET_CLOSE_TIMEOUT) {
-            open?.sock?.awaitClosed()
-        }
-
-        val socket = aSocket(selector).tcp().connect(
+    private suspend fun openNewConnection(url: Url, port: Int, keystore: KeyStore?): Socket {
+        return aSocket(selector).tcp().connect(
             url.host,
             port,
         )
@@ -224,24 +191,29 @@ class GeminiClient(
                     trustManager = SslSettings.getTrustManager()
                 }
             }
-
-        return Conn(socket).also {
-            conns[key] = it
-        }
     }
 
     private suspend fun fetchWithHostAndCert(
-        url: Url, certPEM: ByteArray, keyPEM: ByteArray, redirected: Int = 0
+        url: Url,
+        certPEM: ByteArray,
+        keyPEM: ByteArray,
+        forceNetwork: Boolean,
+        redirected: Int = 0
     ): Result<Response> {
         return suspendRunCatching {
-            val cached = cache.getResponse(url.toString())
-            if (cached != null) {
-                logcat { "Found entry in cache for $url" }
-                readResponseFromCache(cached, redirected).onSuccess { response ->
-                    return@suspendRunCatching response
-                }.onFailure {
-                    cache.deleteResponse("$url")
-                    logcat(ERROR) { "failed to parse cache entry for $url ${it.message}" }
+
+            if (!forceNetwork) {
+                cache.getResponse(url.toString())?.let { cached ->
+                    logcat { "Found entry in cache for $url" }
+                    readResponseFromCache(cached, redirected)
+                        .onSuccess { response ->
+                            logcat { "successfully read from cache fro $url" }
+                            return@suspendRunCatching response
+                        }
+                        .onFailure {
+                            cache.deleteResponse("$url")
+                            logcat(ERROR) { "failed to parse cache entry for $url ${it.message}" }
+                        }
                 }
             }
 
@@ -267,47 +239,44 @@ class GeminiClient(
 
             logcat { "Trying to connect to ${url.host} $port - $url" }
 
-            mutex.withLock {
-                openNewConnection(url, port, keystore)
-            }
-                .sock.use { conn ->
-                    val writeChannel = conn.openWriteChannel(true)
-                    val readChannel = conn.openReadChannel()
+            openNewConnection(url, port, keystore).use { conn ->
+                val writeChannel = conn.openWriteChannel(true)
+                val readChannel = conn.openReadChannel()
 
-                    writeChannel.writeString("${url}\r\n")
+                writeChannel.writeString("${url}\r\n")
 
-                    val buffer = Buffer()
+                val buffer = Buffer()
 
-                    readChannel.readRemaining().use {
-                        it.readAvailable(buffer)
-                    }
-                    val header = getHeader(buffer).getOrThrow()
-
-                    if (
-                        header.status == GeminiCode.StatusRedirectPermanent
-                        || header.status == GeminiCode.StatusRedirectTemporary
-                    ) {
-                        return@suspendRunCatching handleRedirect(
-                            header, redirected, url, certPEM, keyPEM
-                        )
-                    }
-
-                    if (header.status == GeminiCode.StatusSuccess) {
-                        cache.cacheResponse(
-                            url = url.toString(),
-                            header = "${header.status} ${header.meta}\r\n",
-                            // TODO(copy may not be needed)
-                            source = buffer.copy()
-                        )
-                    }
-
-                    Response(
-                        status = header.status,
-                        meta = header.meta,
-                        body = buffer.copy(),
-                        cert = null
-                    )
+                readChannel.readRemaining().use {
+                    it.readAvailable(buffer)
                 }
+                val header = consumeHeader(buffer).getOrThrow()
+
+                when (header.status) {
+                    GeminiCode.StatusRedirectPermanent,
+                    GeminiCode.StatusRedirectTemporary -> {
+                        handleRedirect(
+                            header, redirected, url, certPEM, keyPEM, forceNetwork
+                        )
+                    }
+                    else -> {
+                        if (header.status == GeminiCode.StatusSuccess) {
+                            cache.cacheResponse(
+                                url = url.toString(),
+                                header = "${header.status} ${header.meta}\r\n",
+                                source = buffer.copy()
+                            )
+                        }
+
+                        Response(
+                            status = header.status,
+                            meta = header.meta,
+                            body = buffer,
+                            cert = null
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -317,23 +286,23 @@ class GeminiClient(
         url: Url,
         certPEM: ByteArray,
         keyPEM: ByteArray,
+        forceNetwork: Boolean,
     ): Response {
         if (redirected > config.maxRedirects) {
             error("client was redirected $redirected times > max ${config.maxRedirects}")
         }
 
         if (header.status == GeminiCode.StatusRedirectPermanent) {
-            ByteReadChannel(byteArrayOf()).readRemaining().use { source ->
-                cache.cacheResponse(
-                    url = url.toString(),
-                    header = "${header.status} ${header.meta}\r\n",
-                    source = source
-                )
-            }
+            cache.cacheResponse(
+                url = url.toString(),
+                header = "${header.status} ${header.meta}\r\n",
+                source = Buffer()
+            )
         }
 
         return fetchWithHostAndCert(
             Url(header.meta), certPEM, keyPEM,
+            forceNetwork,
             (redirected + 1)
         )
             .getOrThrow()

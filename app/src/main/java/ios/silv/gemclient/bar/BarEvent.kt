@@ -12,4 +12,5 @@ sealed interface BarEvent : UiEvent {
     data object CreateNewTab : BarEvent
     data object CreateBlankTab : BarEvent
     data class CreateNewPage(val tabId: Long) : BarEvent
+    data object GoToHome: BarEvent
 }

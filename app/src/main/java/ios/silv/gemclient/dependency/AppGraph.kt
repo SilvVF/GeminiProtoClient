@@ -8,6 +8,7 @@ import dev.zacsweers.metro.Multibinds
 import dev.zacsweers.metro.Provider
 import dev.zacsweers.metro.Provides
 import dev.zacsweers.metro.SingleIn
+import ios.silv.core_android.log.logcat
 import ios.silv.database.Database
 import ios.silv.database_android.DatabaseHandler
 import ios.silv.database_android.DatabaseHandlerImpl
@@ -15,6 +16,8 @@ import ios.silv.database_android.DriverFactory
 import ios.silv.database_android.dao.TabsDao
 import ios.silv.gemclient.App
 import ios.silv.gemclient.base.ComposeNavigator
+import ios.silv.gemclient.base.PreviewCache
+import ios.silv.gemclient.settings.SettingsStore
 import ios.silv.gemini.GeminiCache
 import ios.silv.gemini.GeminiClient
 import kotlin.reflect.KClass
@@ -27,7 +30,15 @@ abstract class AppGraph {
 
     @SingleIn(AppScope::class)
     @Provides
+    val previewCache: PreviewCache by lazy { PreviewCache(app) }
+
+    @SingleIn(AppScope::class)
+    @Provides
     val navigator: ComposeNavigator = ComposeNavigator()
+
+    @SingleIn(AppScope::class)
+    @Provides
+    val settingsStore: SettingsStore by lazy { SettingsStore(app) }
 
     @SingleIn(AppScope::class)
     @Provides

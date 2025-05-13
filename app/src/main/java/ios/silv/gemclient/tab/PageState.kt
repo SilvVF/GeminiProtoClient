@@ -1,5 +1,6 @@
 package ios.silv.gemclient.tab
 
+import android.graphics.Picture
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import ios.silv.gemclient.ui.UiState

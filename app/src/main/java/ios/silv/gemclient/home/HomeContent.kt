@@ -97,7 +97,9 @@ private fun GeminiHomeContent(
                         maxLines = 1,
                         modifier = Modifier.padding(end = 4.dp),
                         color = { contentColor },
-                        autoSize = TextAutoSize.StepBased()
+                        autoSize = TextAutoSize.StepBased(
+                            maxFontSize = MaterialTheme.typography.titleLarge.fontSize
+                        )
                     )
                 },
                 actions = {

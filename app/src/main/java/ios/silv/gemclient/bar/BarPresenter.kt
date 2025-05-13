@@ -1,6 +1,5 @@
 package ios.silv.gemclient.bar
 
-import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,6 +20,7 @@ import ios.silv.database_android.dao.TabsDao
 import ios.silv.gemclient.GeminiHome
 import ios.silv.gemclient.GeminiTab
 import ios.silv.gemclient.base.ComposeNavigator
+import ios.silv.gemclient.base.PreviewCache
 import ios.silv.gemclient.dependency.Presenter
 import ios.silv.gemclient.dependency.PresenterKey
 import ios.silv.gemclient.dependency.PresenterScope
@@ -28,11 +28,10 @@ import ios.silv.gemclient.types.StablePage
 import ios.silv.gemclient.types.StableTab
 import ios.silv.gemclient.ui.EventEffect
 import ios.silv.gemclient.ui.EventFlow
-import ios.silv.sqldelight.Page
-import ios.silv.sqldelight.Tab
-import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
+import java.io.File
 
 @ContributesIntoMap(PresenterScope::class)
 @PresenterKey(BarPresenter::class)
@@ -40,6 +39,7 @@ import kotlinx.coroutines.flow.map
 class BarPresenter(
     private val tabsDao: TabsDao,
     private val navigator: ComposeNavigator,
+    private val previewCache: PreviewCache,
     private val navController: NavController,
 ) : Presenter {
 
@@ -68,7 +68,7 @@ class BarPresenter(
         var query by rememberRetained { mutableStateOf("") }
 
         val orderedTabs = rememberRetained {
-            mutableStateListOf<Pair<StableTab, StablePage?>>()
+            mutableStateListOf<Triple<StableTab, StablePage?, File?>>()
         }
 
         val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -76,18 +76,25 @@ class BarPresenter(
         val visibleTab by produceState<GeminiTab?>(null) {
             snapshotFlow { navBackStackEntry }
                 .filterNotNull()
-                .map { it.toRoute<GeminiTab>() }
-                .catch { value = null }
-                .collect { value = it }
+                .map {
+                    try {
+                        it.toRoute<GeminiTab>()
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                .collect {
+                    logcat { "active tab $it" }
+                    value = it
+                }
         }
-
-        val barMode = rememberRetained { MutableTransitionState(BarMode.NONE) }
 
         if (visibleTab != null) {
             LaunchedEffect(visibleTab) {
                 tabsDao.observeTabWithActivePage(visibleTab?.id ?: return@LaunchedEffect)
                     .filterNotNull()
                     .collect { (_, activePage) ->
+                        logcat { "received new active page $activePage" }
                         if (activePage != null) {
                             query = activePage.url
                         }
@@ -96,26 +103,32 @@ class BarPresenter(
         }
 
         LaunchedEffect(Unit) {
-            tabsDao
-                .observeTabsWithActivePage()
-                .collect { items ->
-                    logcat { "new items = $items" }
-                    val newTabs = updateListPreserveOrder(
-                        orderedTabs,
-                        items.map { (t, p) ->
-                            Pair(
-                                StableTab(t),
-                                if (p == null) {
-                                    null
-                                } else {
-                                    StablePage(p)
-                                }
-                            )
-                        }
-                    )
-                    orderedTabs.clear()
-                    orderedTabs.addAll(newTabs)
-                }
+            combine(
+                previewCache.invalidated,
+                tabsDao.observeTabsWithActivePage(),
+                ::Pair
+            ).collect { (_, tabs)  ->
+                logcat { "new items = $tabs" }
+                val newTabs = updateListPreserveOrder(
+                    orderedTabs.map { Pair(it.first, it.second) },
+                    tabs.map { (t, p) ->
+                        Pair(
+                            StableTab(t),
+                            if (p == null) {
+                                null
+                            } else {
+                                StablePage(p)
+                            }
+                        )
+                    }
+                )
+                orderedTabs.clear()
+                orderedTabs.addAll(
+                    newTabs.map { (tab, page) ->
+                        Triple(tab, page, previewCache.readFromCache(tab.id))
+                    }
+                )
+            }
         }
 
 
@@ -157,13 +170,15 @@ class BarPresenter(
                 }
 
                 is BarEvent.SearchChanged -> query = event.query
+                BarEvent.GoToHome -> {
+                    navigator.topLevelDest.tryEmit(GeminiHome)
+                }
             }
         }
 
         return BarState(
             tabs = orderedTabs,
             query = query,
-            barMode = barMode,
             activeTab = visibleTab,
             showSearchbar = navBackStackEntry?.destination?.hasRoute(GeminiTab::class) == true ||
                     navBackStackEntry?.destination?.hasRoute(GeminiHome::class) == true

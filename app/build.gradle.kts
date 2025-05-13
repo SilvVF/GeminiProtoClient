@@ -42,7 +42,6 @@ android {
 
     buildFeatures {
         compose = true
-        viewBinding = true
         buildConfig = true
     }
     compileOptions {
@@ -62,26 +61,31 @@ android {
 }
 
 dependencies {
+    implementation(project(":core-android"))
+    implementation(project(":gemini"))
+    implementation(project(":database-android"))
+
+    implementation(kotlin("reflect"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
     implementation(libs.androidx.activity.compose)
-
-    implementation(libs.rin)
-
-    api(project(":core-android"))
-    api(project(":gemini"))
-    api(project(":database-android"))
-
-    implementation(libs.bundles.compose.ui)
-    implementation(libs.bundles.compose.runtime)
+    implementation(libs.androidx.datastore)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.core.splashscreen)
 
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
+
+    implementation(libs.rin)
+    implementation(libs.coil)
+    implementation(libs.reorderable)
+
+    implementation(libs.bundles.compose.ui)
+    implementation(libs.bundles.compose.runtime)
+
     implementation(libs.kotlinx.serialization.json)
 
-    implementation(libs.reorderable)
 }

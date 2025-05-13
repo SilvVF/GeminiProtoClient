@@ -3,6 +3,7 @@ package ios.silv.gemini
 import io.ktor.http.ContentType
 import io.ktor.utils.io.CancellationException
 import io.ktor.utils.io.charsets.forName
+import io.ktor.utils.io.core.copy
 import io.ktor.utils.io.core.readText
 import ios.silv.core_android.log.logcat
 import kotlinx.coroutines.flow.Flow
@@ -23,7 +24,7 @@ object GeminiParser {
     }
 
     private fun handleSuccess(query: String, res: Response): Flow<ContentNode> {
-        res.body.use { src ->
+        res.body.peek().use { src ->
             val (mediaType, params) = decodeMeta(res.meta).getOrThrow()
             val encoding = params.getOrDefault("charset", "utf-8")
 
@@ -106,7 +107,6 @@ private fun parseText(query: String, body: String): Flow<ContentNode.Line> = flo
 
             else -> ContentNode.Line.Text(block)
         }
-        logcat { node::class.toString() }
         emit(node)
     }
 }

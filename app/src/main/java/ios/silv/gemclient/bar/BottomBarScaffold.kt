@@ -13,6 +13,7 @@ import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -49,6 +50,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridItemScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -91,7 +93,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -115,6 +119,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.core.view.HapticFeedbackConstantsCompat
 import androidx.core.view.ViewCompat
+import coil3.compose.AsyncImage
+import io.github.takahirom.rin.rememberRetained
 import ios.silv.core_android.log.logcat
 import ios.silv.gemclient.R
 import ios.silv.gemclient.bar.BarEvent.CreateBlankTab
@@ -138,6 +144,7 @@ import ios.silv.sqldelight.Tab
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyGridState
+import java.io.File
 
 enum class BarMode {
     EDITING,
@@ -155,6 +162,7 @@ fun BottombarScaffold(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit
 ) {
+    val barMode = rememberRetained { MutableTransitionState(BarMode.NONE) }
 
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -168,21 +176,21 @@ fun BottombarScaffold(
     }
 
     val barModeTransition = rememberTransition(
-        transitionState = state.barMode,
+        transitionState = barMode,
         label = "bar-mode-search-transition"
     )
 
     BackHandler(
-        enabled = state.barMode.currentState != BarMode.NONE
+        enabled = barMode.currentState != BarMode.NONE
     ) {
         focusManager.clearFocus()
-        state.barMode.targetState = BarMode.NONE
+        barMode.targetState = BarMode.NONE
     }
 
     val ime by isImeVisibleAsState()
 
     LaunchedEffect(ime) {
-        state.barMode.targetState = if (ime) {
+        barMode.targetState = if (ime) {
             BarMode.SEARCHING
         } else {
             BarMode.NONE
@@ -209,11 +217,12 @@ fun BottombarScaffold(
                         state = state,
                         events = events,
                         lazyGridState = lazyGridState,
+                        barMode = barMode,
                         reorderableLazyGridState = reorderableLazyGridState
                     )
                 } else {
                     CompositionLocalProvider(
-                        LocalBarMode provides state.barMode
+                        LocalBarMode provides barMode
                     ) {
                         content()
                     }
@@ -255,8 +264,11 @@ fun BottombarScaffold(
                 focusRequester = focusRequester,
                 onFocusChanged = { focusState ->
                     if (focusState.hasFocus) {
-                        state.barMode.targetState = BarMode.SEARCHING
+                        barMode.targetState = BarMode.SEARCHING
                     }
+                },
+                onHomeClicked = {
+                    events.tryEmit(BarEvent.GoToHome)
                 },
                 searchText = state.query,
                 onTextChanged = {
@@ -272,7 +284,7 @@ fun BottombarScaffold(
                     }
                 },
                 toggleEditing = {
-                    state.barMode.targetState = if (state.barMode.currentState == BarMode.EDITING) {
+                    barMode.targetState = if (barMode.currentState == BarMode.EDITING) {
                         BarMode.NONE
                     } else {
                         BarMode.EDITING
@@ -304,16 +316,21 @@ private fun TabReorderGrid(
     state: BarState,
     events: EventFlow<BarEvent>,
     reorderableLazyGridState: ReorderableLazyGridState,
+    barMode: MutableTransitionState<BarMode>,
     lazyGridState: LazyGridState,
 ) {
     val colors = CardDefaults.elevatedCardColors()
+
     LazyVerticalGrid(
         modifier = Modifier.fillMaxSize(),
         state = lazyGridState,
         columns = GridCells.Fixed(2),
         contentPadding = WindowInsets.systemBars.asPaddingValues(),
     ) {
-        items(state.tabs, { it.first.id }) { (tab, activePage) ->
+        itemsIndexed(
+            items = state.tabs,
+            key = { _, it -> it.first.id }
+        ) { idx, (tab, activePage, previewImage) ->
             val swipeToDismissState = rememberSwipeToDismissBoxState(
                 confirmValueChange = {
                     when (it) {
@@ -341,12 +358,14 @@ private fun TabReorderGrid(
                     )
                 },
                 onSelected = {
+                    barMode.targetState = BarMode.NONE
                     events.tryEmit(GoToTab(tab))
-                    state.barMode.targetState = BarMode.NONE
                 },
                 tab = tab,
                 activePage = activePage,
-                colors = colors
+                previewImage = previewImage,
+                colors = colors,
+                idx = idx
             )
         }
     }
@@ -356,9 +375,11 @@ private fun TabReorderGrid(
 private fun LazyGridItemScope.TabPreviewItem(
     reorderableLazyGridState: ReorderableLazyGridState,
     tab: StableTab,
+    previewImage: File?,
     activePage: StablePage?,
     swipeToDismissState: SwipeToDismissBoxState,
     isTop: Boolean,
+    idx: Int,
     onClose: () -> Unit,
     onSelected: () -> Unit,
     colors: CardColors
@@ -376,63 +397,74 @@ private fun LazyGridItemScope.TabPreviewItem(
             modifier = Modifier,
             backgroundContent = {}
         ) {
-            ElevatedCard(
-                interactionSource = interactionSource,
-                onClick = { onSelected() },
+            TerminalSection(
                 modifier = Modifier
-                    .graphicsLayer {
-                        alpha =
-                            EaseInOutSine.transform(swipeToDismissState.nonGoogleRetardProgress)
-                    }
-                    .longPressDraggableHandle(
-                        interactionSource = interactionSource,
-                        onDragStarted = {
-                            ViewCompat.performHapticFeedback(
-                                view,
-                                HapticFeedbackConstantsCompat.GESTURE_START
-                            )
-                        },
-                        onDragStopped = {
-                            ViewCompat.performHapticFeedback(
-                                view,
-                                HapticFeedbackConstantsCompat.GESTURE_END
-                            )
-                        },
+                    .height(IntrinsicSize.Min)
+                    .padding(horizontal = TerminalSectionDefaults.horizontalPadding)
+                    .background(MaterialTheme.colorScheme.background),
+                label = {
+                    TerminalSectionDefaults.Label(
+                        "tab-$idx"
                     )
-                    .padding(horizontal = 6.dp, vertical = 6.dp)
-                    .fillMaxWidth()
-                    .height(220.dp)
-                    .conditional(
-                        isTop,
-                        ifTrue = Modifier.border(
-                            3.dp,
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = MaterialTheme.shapes.small
-                        ),
-                        ifFalse = Modifier.border(
-                            1.dp,
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            shape = MaterialTheme.shapes.small
+                },
+                borderColor = if (isTop) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                }
+            ) {
+                ElevatedCard(
+                    interactionSource = interactionSource,
+                    onClick = { onSelected() },
+                    shape = RectangleShape,
+                    modifier = Modifier
+                        .graphicsLayer {
+                            alpha =
+                                EaseInOutSine.transform(swipeToDismissState.nonGoogleRetardProgress)
+                        }
+                        .longPressDraggableHandle(
+                            interactionSource = interactionSource,
+                            onDragStarted = {
+                                ViewCompat.performHapticFeedback(
+                                    view,
+                                    HapticFeedbackConstantsCompat.GESTURE_START
+                                )
+                            },
+                            onDragStopped = {
+                                ViewCompat.performHapticFeedback(
+                                    view,
+                                    HapticFeedbackConstantsCompat.GESTURE_END
+                                )
+                            },
                         )
-                    ),
-                colors = colors,
-                shape = MaterialTheme.shapes.small,
-
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .padding(2.dp),
+                    colors = colors
                 ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FadingEndText(
-                        modifier = Modifier.weight(1f),
-                        text = activePage?.url.orEmpty().ifBlank { "gemini://" },
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        softWrap = false,
-                        fadeColor = colors.containerColor
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FadingEndText(
+                            modifier = Modifier.weight(1f),
+                            text = activePage?.url.orEmpty().ifBlank { "gemini://" },
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            softWrap = false,
+                            fadeColor = colors.containerColor
+                        )
+                        CloseIconButton(onClose)
+                    }
+                    AsyncImage(
+                        model = previewImage,
+                        contentDescription = null,
+                        contentScale = ContentScale.FillWidth,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
                     )
-                    CloseIconButton(onClose)
                 }
             }
         }
@@ -448,6 +480,7 @@ private fun BottomSearchBar(
     searchText: String,
     onTextChanged: (String) -> Unit,
     onSearch: (String) -> Unit,
+    onHomeClicked: () -> Unit,
     tabsCount: Int,
     toggleEditing: () -> Unit
 ) {
@@ -475,6 +508,7 @@ private fun BottomSearchBar(
                 onFocusChanged,
                 searchText,
                 onTextChanged,
+                onHomeClicked,
                 onSearch,
                 tabsCount,
                 toggleEditing
@@ -490,6 +524,7 @@ fun RowScope.BottomBarContent(
     onFocusChanged: (state: FocusState) -> Unit,
     searchText: String,
     onTextChanged: (String) -> Unit,
+    onHomeClicked: () -> Unit,
     onSearch: (String) -> Unit,
     tabsCount: Int,
     toggleEditing: () -> Unit
@@ -498,7 +533,7 @@ fun RowScope.BottomBarContent(
         visible = { it != BarMode.SEARCHING }
     ) {
         IconButton(
-            onClick = {}
+            onClick = onHomeClicked
         ) {
             Icon(
                 imageVector = Icons.Rounded.Home,

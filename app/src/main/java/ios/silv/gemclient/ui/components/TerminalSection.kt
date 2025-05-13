@@ -23,6 +23,7 @@ import androidx.compose.ui.layout.MeasurePolicy
 import androidx.compose.ui.layout.MeasureResult
 import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -33,7 +34,8 @@ object TerminalSectionDefaults {
     @Composable
     fun Label(
         text: String,
-        color: Color = MaterialTheme.colorScheme.surface
+        style: TextStyle = MaterialTheme.typography.labelLarge,
+        color: Color = MaterialTheme.colorScheme.background
     ) {
         Surface(
             color = color,
@@ -42,7 +44,7 @@ object TerminalSectionDefaults {
             Text(
                 text = text,
                 modifier = Modifier.padding(horizontal = 2.dp),
-                style = MaterialTheme.typography.labelLarge
+                style = style
             )
         }
     }

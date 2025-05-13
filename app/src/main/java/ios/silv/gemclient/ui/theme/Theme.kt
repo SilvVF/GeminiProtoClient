@@ -17,6 +17,19 @@ private val DarkColorScheme = darkColorScheme(
     tertiary = Pink80
 )
 
+private val DarkMochaColorScheme = darkColorScheme(
+    primary = MochaMauve,
+    onPrimary = MochaCrust,
+    secondary = MochaTeal,
+    onSecondary = MochaCrust,
+    background = MochaBase,
+    onBackground = MochaText,
+    surface = MochaSurface0,
+    onSurface = MochaText,
+    error = MochaRed,
+    onError = MochaCrust
+)
+
 private val LightColorScheme = lightColorScheme(
     primary = Purple40,
     secondary = PurpleGrey40,
@@ -46,7 +59,7 @@ fun GemClientTheme(
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
 
-        darkTheme -> DarkColorScheme
+        darkTheme -> DarkMochaColorScheme
         else -> LightColorScheme
     }
 

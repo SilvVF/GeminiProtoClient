@@ -35,21 +35,26 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.drawscope.draw
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
@@ -58,6 +63,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import ios.silv.core_android.log.logcat
 import ios.silv.gemclient.dependency.metroPresenter
+import ios.silv.gemclient.lib.capturable.CaptureController
+import ios.silv.gemclient.lib.capturable.capturable
+import ios.silv.gemclient.lib.capturable.rememberCaptureController
 import ios.silv.gemclient.ui.EventFlow
 import ios.silv.gemclient.ui.components.TerminalScrollToTop
 import ios.silv.gemclient.ui.components.TerminalSection
@@ -65,7 +73,6 @@ import ios.silv.gemclient.ui.components.TerminalSectionDefaults
 import ios.silv.gemclient.ui.rememberEventFlow
 import ios.silv.gemclient.ui.sampleScrollingState
 import ios.silv.gemini.ContentNode
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
@@ -118,7 +125,7 @@ private fun PageInputContent(
 }
 
 @Stable
-enum class DragAnchors {
+enum class NavLayoutAnchors {
     Start,
     End,
 }
@@ -127,37 +134,42 @@ private val NavBlockSize = 128.dp
 
 private fun createDraggable(
     density: Density,
-    initial: DragAnchors
-): AnchoredDraggableState<DragAnchors> {
+    initial: NavLayoutAnchors
+): AnchoredDraggableState<NavLayoutAnchors> {
     return AnchoredDraggableState(
         initialValue = initial,
         anchors = DraggableAnchors {
             with(density) {
-                DragAnchors.End at (NavBlockSize + TerminalSectionDefaults.horizontalPadding).toPx()
-                DragAnchors.Start at 0.dp.toPx()
+                NavLayoutAnchors.End at (NavBlockSize + TerminalSectionDefaults.horizontalPadding).toPx()
+                NavLayoutAnchors.Start at 0.dp.toPx()
             }
         }
     )
 }
 
+typealias NavLayoutDragState = AnchoredDraggableState<NavLayoutAnchors>
+
 @Composable
-private fun DraggableNavLayout(
+fun rememberNavLayoutDraggableState(
+    density: Density = LocalDensity.current
+) = rememberSaveable(
+    saver = Saver(
+        save = { value -> value.currentValue.ordinal },
+        restore = { saved ->
+            createDraggable(density, NavLayoutAnchors.entries[saved])
+        }
+    )
+) {
+    createDraggable(density, NavLayoutAnchors.Start)
+}
+
+@Composable
+fun DraggableNavLayout(
     navBlock: @Composable () -> Unit,
     stdOutBlock: @Composable () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    draggableState: NavLayoutDragState = rememberNavLayoutDraggableState()
 ) {
-    val density = LocalDensity.current
-    val draggableState = rememberSaveable(
-        saver = Saver(
-            save = { value -> value.currentValue.ordinal },
-            restore = { saved ->
-                createDraggable(density, DragAnchors.entries[saved])
-            }
-        )
-    ) {
-        createDraggable(density, DragAnchors.Start)
-    }
-
     Layout(
         modifier = modifier
             .anchoredDraggable(
@@ -259,7 +271,6 @@ private fun NavBlock(
                     value = heading
                 }
         }
-        logcat("NavCurr") { current.toString() }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize()
@@ -307,6 +318,8 @@ private fun StdOutBlock(
     listState: LazyListState,
 ) {
     val scope = rememberCoroutineScope()
+    val captureController = rememberCaptureController()
+
     TerminalSection(
         modifier = Modifier.padding(horizontal = TerminalSectionDefaults.horizontalPadding),
         label = {
@@ -315,8 +328,22 @@ private fun StdOutBlock(
     ) {
         when (pageState) {
             is PageState.Content -> {
-                Box(Modifier.fillMaxSize().padding(horizontal = 2.dp)) {
+                LaunchedEffect(pageState.nodes) {
+                    scope.launch {
+                        val bitmapAsync = captureController.captureAsync()
+                        runCatching {
+                            val bitmap = bitmapAsync.await()
+                            pageEvents.tryEmit(PageEvent.PreviewSaved(bitmap))
+                        }
+                    }
+                }
 
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 2.dp)
+                        .capturable(captureController)
+                ) {
                     val scrollToTopVisible by listState.sampleScrollingState()
 
                     LazyColumn(

@@ -36,6 +36,10 @@ class TabsDao(
         tabQueries.selectTabById(tabId)
     }
 
+    suspend fun selectTabIds(): List<Long> {
+        return databaseHandler.awaitList { tabQueries.selectTabIds() }
+    }
+
     @Throws(IllegalStateException::class, NullPointerException::class)
     suspend fun insertPage(tabId: Long, url: String): Page =
         databaseHandler.awaitOneExecutable(true) {

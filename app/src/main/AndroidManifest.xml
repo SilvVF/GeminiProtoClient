@@ -22,7 +22,7 @@
             android:name=".MainActivity"
             android:exported="true"
             tools:ignore="Instantiatable"
-            android:theme="@style/Theme.GemClient">
+            android:theme="@style/Theme.GemClient.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
