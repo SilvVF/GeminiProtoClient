@@ -2,21 +2,28 @@ package ios.silv.gemclient.dependency
 
 import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
 import androidx.lifecycle.HasDefaultViewModelProviderFactory
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import ios.silv.core_android.log.logcat
 import ios.silv.gemclient.base.LocalNavController
 
 @Composable
 inline fun <reified P : Presenter> metroPresenter(): P {
-    return metroPresenterProviderFactory().create(
-        P::class.java,
-        LocalNavController.current
-    )
+    val factory = LocalMetroPresenterFactory.current
+    val navController = LocalNavController.current
+
+    return remember(factory, navController) {
+        logcat(tag = "metroPresenter") { "created factory ${P::class}" }
+        factory.create(
+            P::class.java,
+            navController
+        )
+    }
 }
 
 @Composable
@@ -28,11 +35,6 @@ inline fun <reified VM : ViewModel> metroViewModel(
     key: String? = null,
 ): VM {
     return viewModel(viewModelStoreOwner, key, factory = metroViewModelProviderFactory())
-}
-
-@Composable
-fun metroPresenterProviderFactory(): PresenterFactory {
-    return LocalMetroPresenterFactory.current
 }
 
 @Composable
