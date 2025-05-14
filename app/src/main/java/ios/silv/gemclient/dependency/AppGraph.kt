@@ -34,11 +34,11 @@ abstract class AppGraph {
 
     @SingleIn(AppScope::class)
     @Provides
-    val navigator: ComposeNavigator = ComposeNavigator()
+    val provideNavigator: ComposeNavigator = ComposeNavigator()
 
     @SingleIn(AppScope::class)
     @Provides
-    val settingsStore: SettingsStore by lazy { SettingsStore(app) }
+    val provideSettingsStore: SettingsStore by lazy { SettingsStore(app) }
 
     @SingleIn(AppScope::class)
     @Provides
@@ -46,16 +46,17 @@ abstract class AppGraph {
 
     @SingleIn(AppScope::class)
     @Provides
-    fun provideDatabase(driver: SqlDriver): Database = Database(driver)
+    val provideDatabase: Database by lazy { Database(provideDriver) }
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideDatabaseHandler(database: Database, sqlDriver: SqlDriver): DatabaseHandler =
-        DatabaseHandlerImpl(database, sqlDriver)
+    val provideDatabaseHandler: DatabaseHandler  by lazy {
+        DatabaseHandlerImpl(provideDatabase, provideDriver)
+    }
 
     @SingleIn(AppScope::class)
     @Provides
-    fun provideTabsRepo(databaseHandler: DatabaseHandler): TabsDao = TabsDao(databaseHandler)
+    val tabsDao: TabsDao by lazy { TabsDao(provideDatabaseHandler) }
 
     @SingleIn(AppScope::class)
     @Provides

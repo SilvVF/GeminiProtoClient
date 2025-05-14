@@ -1,6 +1,7 @@
 package ios.silv.gemclient
 
 import android.app.Application
+import androidx.lifecycle.lifecycleScope
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -10,6 +11,7 @@ import coil3.request.crossfade
 import dev.zacsweers.metro.createGraphFactory
 import ios.silv.core_android.log.AndroidLogcatLogger
 import ios.silv.core_android.log.LogPriority
+import ios.silv.core_android.suspendRunCatching
 import ios.silv.gemclient.dependency.AppGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +29,12 @@ class App : Application(), SingletonImageLoader.Factory {
         super.onCreate()
 
         AndroidLogcatLogger.installOnDebuggableApp(this, minPriority = LogPriority.VERBOSE)
+
+        CoroutineScope(Dispatchers.IO).launch {
+            suspendRunCatching {
+                appGraph.previewCache.cleanCache(appGraph.tabsDao.selectTabIds())
+            }
+        }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {

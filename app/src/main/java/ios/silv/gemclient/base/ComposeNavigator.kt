@@ -2,9 +2,13 @@ package ios.silv.gemclient.base
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.navigation.NavController
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import ios.silv.core_android.log.logcat
+import ios.silv.gemclient.GeminiHome
+import ios.silv.gemclient.Screen
 import ios.silv.gemclient.TopLevelDest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +54,7 @@ class ComposeNavigator {
     // and still get the navigation result later
     val navControllerFlow = MutableStateFlow<NavController?>(null)
 
+
     suspend fun CoroutineScope.handleNavigationCommands(navController: NavController) {
         navControllerFlow.value = navController
         logcat { "set controller" }
@@ -62,12 +67,14 @@ class ComposeNavigator {
         topLevelDest.onEach { dest ->
             logcat { "sending nav command $dest" }
             navController.navigate(dest) {
+
+                launchSingleTop = true
+
                 popUpTo(
                     route = dest::class
                 ) {
-                    saveState = true
+                    inclusive = true
                 }
-                launchSingleTop = true
             }
         }
             .launchIn(this)

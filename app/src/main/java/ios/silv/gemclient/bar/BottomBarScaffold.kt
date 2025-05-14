@@ -2,17 +2,12 @@ package ios.silv.gemclient.bar
 
 import androidx.activity.compose.BackHandler
 import androidx.annotation.FloatRange
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColor
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.EaseInOutSine
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Transition
 import androidx.compose.animation.core.rememberTransition
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,31 +23,22 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridItemScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -63,7 +49,6 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material3.CardColors
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
@@ -96,11 +81,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextLayoutResult
@@ -114,10 +96,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.min
 import androidx.core.view.HapticFeedbackConstantsCompat
 import androidx.core.view.ViewCompat
 import coil3.compose.AsyncImage
@@ -138,15 +118,11 @@ import ios.silv.gemclient.ui.EventFlow
 import ios.silv.gemclient.ui.components.TerminalSection
 import ios.silv.gemclient.ui.components.TerminalSectionButton
 import ios.silv.gemclient.ui.components.TerminalSectionDefaults
-import ios.silv.gemclient.ui.conditional
 import ios.silv.gemclient.ui.isImeVisibleAsState
 import ios.silv.gemclient.ui.nonGoogleRetardProgress
-import ios.silv.sqldelight.Page
-import ios.silv.sqldelight.Tab
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyGridState
-import java.io.File
 
 enum class BarMode {
     EDITING,
@@ -208,13 +184,19 @@ fun BottombarScaffold(
             )
     ) {
         Box(Modifier.weight(1f)) {
-            barModeTransition.AnimatedContent(
-                modifier = Modifier.fillMaxSize(),
-                transitionSpec = {
-                    fadeIn() togetherWith fadeOut()
-                }
-            ) { mode ->
-                if (mode == BarMode.EDITING) {
+            CompositionLocalProvider(
+                LocalBarMode provides barMode
+            ) {
+                content()
+            }
+            barModeTransition.AnimatedVisibility(
+                modifier = Modifier.matchParentSize(),
+                visible = { it == BarMode.EDITING },
+            ) {
+                Surface(
+                    modifier = Modifier.matchParentSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
                     TabReorderGrid(
                         state = state,
                         events = events,
@@ -222,12 +204,6 @@ fun BottombarScaffold(
                         barMode = barMode,
                         reorderableLazyGridState = reorderableLazyGridState
                     )
-                } else {
-                    CompositionLocalProvider(
-                        LocalBarMode provides barMode
-                    ) {
-                        content()
-                    }
                 }
             }
             barModeTransition.AnimatedVisibility(
@@ -591,12 +567,12 @@ fun RowScope.BottomBarContent(
             Box(
                 Modifier
                     .minimumInteractiveComponentSize()
-                    .clip(MaterialTheme.shapes.small)
+                    .clip(RectangleShape)
                     .height(32.dp)
                     .border(
                         2.dp,
                         MaterialTheme.colorScheme.onSurface,
-                        MaterialTheme.shapes.small
+                        RectangleShape
                     )
                     .clickable { toggleEditing() }
                     .aspectRatio(1.2f / 1f)

@@ -1,17 +1,17 @@
 package ios.silv.gemclient.tab
 
-import android.content.Context
-import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.ProduceStateScope
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
@@ -24,6 +24,8 @@ import ios.silv.gemclient.base.PreviewCache
 import ios.silv.gemclient.dependency.Presenter
 import ios.silv.gemclient.dependency.PresenterKey
 import ios.silv.gemclient.dependency.PresenterScope
+import ios.silv.gemclient.lib.rin.produceRetainedState
+import ios.silv.gemclient.lib.rin.rememberRetained
 import ios.silv.gemclient.tab.PageState.Content.UiNode
 import ios.silv.gemclient.types.StablePage
 import ios.silv.gemclient.ui.EventEffect
@@ -32,12 +34,17 @@ import ios.silv.gemini.GeminiClient
 import ios.silv.gemini.GeminiCode
 import ios.silv.gemini.GeminiParser
 import ios.silv.gemini.Response
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.toList
-import java.io.File
+import kotlinx.coroutines.launch
 
 @ContributesIntoMap(PresenterScope::class)
 @PresenterKey(PagePresenter::class)
@@ -48,33 +55,50 @@ class PagePresenter(
     private val tabsDao: TabsDao
 ) : Presenter {
 
-    @Stable
-    private data class RetainedResponse(private val result: Result<Response>?) : RetainedObserver {
 
-        var value by mutableStateOf(result)
+    @Stable
+    private inner class RetainedResponse(private val page: StablePage) : RetainedObserver {
+
+        val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+        var value by mutableStateOf<Result<Response>?>(null)
+        var loadJob: Job? = null
+
+        fun load(forceNetwork: Boolean) {
+            loadJob?.cancel()
+            closeResponse()
+            loadJob = scope.launch {
+                value = client.makeGeminiQuery(page.url, forceNetwork)
+            }
+        }
+
+        private fun closeResponse() {
+            value?.getOrNull()?.close()
+            value = null
+        }
 
         override fun onRemembered() {
             logcat { "onRemembered" }
+            load(false)
         }
 
         override fun onForgotten() {
             logcat { "onForgotten" }
-            value?.getOrNull()?.close()
-            value = null
+            scope.cancel()
+            closeResponse()
         }
     }
 
     @Composable
     fun present(page: StablePage, events: EventFlow<PageEvent>): PageState {
-
         var input by rememberRetained { mutableStateOf("") }
-        val response = rememberRetained { RetainedResponse(null) }
+        val response = rememberRetained(page) { RetainedResponse(page) }
+
         var fetchId by remember { mutableIntStateOf(0) }
 
-        LaunchedEffect(page, fetchId) {
-            response.value?.getOrNull()?.close()
-            response.value = null
-            response.value = client.makeGeminiQuery(page.url)
+        if (fetchId != 0) {
+            LaunchedEffect(fetchId) {
+                response.load(fetchId != 0)
+            }
         }
 
         EventEffect(events) { event ->
@@ -97,11 +121,12 @@ class PagePresenter(
             }
         }
 
-        val parsedNodes by produceRetainedState(emptyList<UiNode>()) {
+        val parsedNodes by produceRetainedState(emptyList<UiNode>(), response) {
             snapshotFlow { response.value }
                 .map { it?.getOrNull() }
                 .distinctUntilChanged()
                 .mapLatest { res ->
+                    logcat { "received new res $res" }
                     value = if (res == null || res.status == GeminiCode.StatusInput) {
                         emptyList()
                     } else {

@@ -13,20 +13,6 @@ import ios.silv.core_android.log.logcat
 import ios.silv.gemclient.base.LocalNavController
 
 @Composable
-inline fun <reified P : Presenter> metroPresenter(): P {
-    val factory = LocalMetroPresenterFactory.current
-    val navController = LocalNavController.current
-
-    return remember(factory, navController) {
-        logcat(tag = "metroPresenter") { "created factory ${P::class}" }
-        factory.create(
-            P::class.java,
-            navController
-        )
-    }
-}
-
-@Composable
 inline fun <reified VM : ViewModel> metroViewModel(
     viewModelStoreOwner: ViewModelStoreOwner =
         checkNotNull(LocalViewModelStoreOwner.current) {

@@ -10,6 +10,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import ios.silv.gemclient.settings.Theme
 
 private val DarkColorScheme = darkColorScheme(
     primary = Purple80,
@@ -17,42 +18,93 @@ private val DarkColorScheme = darkColorScheme(
     tertiary = Pink80
 )
 
-private val DarkMochaColorScheme = darkColorScheme(
+val DarkMochaColorScheme = darkColorScheme(
     primary = MochaMauve,
     onPrimary = MochaCrust,
+    primaryContainer = MochaLavender,
+    onPrimaryContainer = MochaCrust,
+
     secondary = MochaTeal,
     onSecondary = MochaCrust,
+    secondaryContainer = MochaSurface2,
+    onSecondaryContainer = MochaText,
+
+    tertiary = MochaGreen,
+    onTertiary = MochaCrust,
+    tertiaryContainer = MochaSurface2,
+    onTertiaryContainer = MochaText,
+
     background = MochaBase,
     onBackground = MochaText,
+
     surface = MochaSurface0,
     onSurface = MochaText,
+    surfaceVariant = MochaSurface2,
+    onSurfaceVariant = MochaOverlay1,
+
+    inverseSurface = MochaText,
+    inverseOnSurface = MochaBase,
+
     error = MochaRed,
-    onError = MochaCrust
+    onError = MochaCrust,
+    errorContainer = MochaMaroon,
+    onErrorContainer = MochaCrust,
+
+    outline = MochaOverlay1,
+    outlineVariant = MochaSurface2,
+
+    surfaceTint = MochaMauve
 )
+val LightLatteColorScheme = lightColorScheme(
+    primary = LatteBlue,
+    onPrimary = LatteCrust,
+    primaryContainer = LatteLavender,
+    onPrimaryContainer = LatteCrust,
 
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+    secondary = LatteTeal,
+    onSecondary = LatteCrust,
+    secondaryContainer = LatteSurface1,
+    onSecondaryContainer = LatteText,
 
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    tertiary = LatteGreen,
+    onTertiary = LatteCrust,
+    tertiaryContainer = LatteSurface1,
+    onTertiaryContainer = LatteText,
+
+    background = LatteBase,
+    onBackground = LatteText,
+
+    surface = LatteSurface0,
+    onSurface = LatteText,
+    surfaceVariant = LatteSurface2,
+    onSurfaceVariant = LatteOverlay1,
+
+    inverseSurface = LatteText,
+    inverseOnSurface = LatteBase,
+
+    error = LatteRed,
+    onError = LatteCrust,
+    errorContainer = LatteFlamingo,
+    onErrorContainer = LatteCrust,
+
+    outline = LatteOverlay1,
+    outlineVariant = LatteSurface2,
+    surfaceTint = LatteBlue
 )
 
 @Composable
 fun GemClientTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    theme: Theme,
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    val darkTheme = when(theme) {
+        Theme.Light -> false
+        Theme.Dark -> true
+        Theme.System -> isSystemInDarkTheme()
+    }
+
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
@@ -60,7 +112,7 @@ fun GemClientTheme(
         }
 
         darkTheme -> DarkMochaColorScheme
-        else -> LightColorScheme
+        else -> LightLatteColorScheme
     }
 
     MaterialTheme(

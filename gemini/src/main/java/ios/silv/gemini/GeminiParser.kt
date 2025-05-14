@@ -42,14 +42,18 @@ object GeminiParser {
 private val headingRegex = Regex("#+\\s+.*")
 
 private fun resolveUrl(baseUrl: String, url: String): String {
-    val baseUri = URI(baseUrl)
+    val baseUri = try {
+        URI(baseUrl.trim())
+    } catch (e: Exception) {
+        return ""
+    }
     val resolvedUri = baseUri.resolve(url)
     return resolvedUri.toString()
 }
 
 private fun isRelativeUrl(url: String): Boolean {
     return try {
-        val uri = URI(url)
+        val uri = URI(url.trim())
         uri.scheme == null // If there's no scheme (http, https), it's relative
     } catch (e: Exception) {
         false // Invalid URLs are not considered relative

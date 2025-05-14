@@ -50,6 +50,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import ios.silv.gemclient.GeminiHome
 import ios.silv.gemclient.GeminiSettings
+import ios.silv.gemclient.bar.BarEvent
 import ios.silv.gemclient.base.LocalNavigator
 import ios.silv.gemclient.dependency.metroPresenter
 import ios.silv.gemclient.tab.DraggableNavLayout
@@ -77,16 +78,14 @@ private val settingsItems = listOf(
         "theme",
         sectionContent = { state, events ->
             SettingsRadioButtonItems(
-                items = remember {
-                    listOf("light", "dark")
-                },
+                items = Theme.entries,
                 modifier = Modifier.fillMaxWidth(),
-                selected = if (state.darkMode) "dark" else "light",
+                selected = state.theme,
                 onSelected = {
-                    events.tryEmit(SettingsEvent.ToggleDarkMode)
+                    events.tryEmit(SettingsEvent.ChangeTheme(it))
                 },
             ) {
-                Text(it)
+                Text(it.name)
             }
         }
     ),
@@ -177,7 +176,6 @@ fun NavGraphBuilder.geminiSettingsDestination() {
                         )
                     },
                     actions = {
-                        val navigator = LocalNavigator.current
                         TerminalSectionButton(
                             modifier = Modifier
                                 .padding(start = 4.dp)
@@ -187,7 +185,7 @@ fun NavGraphBuilder.geminiSettingsDestination() {
                                 TerminalSectionDefaults.Label("home")
                             },
                             onClick = {
-                                navigator.topLevelDest.tryEmit(GeminiHome)
+                                events.tryEmit(SettingsEvent.NavigateHome)
                             }
                         ) {
                             Icon(

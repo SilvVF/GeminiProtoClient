@@ -1,19 +1,15 @@
 package ios.silv.gemclient.settings
 
 import android.content.Context
-import androidx.annotation.Keep
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.zacsweers.metro.Inject
-import ios.silv.core_android.log.asLog
 import ios.silv.core_android.log.logcat
-import ios.silv.gemclient.App
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,13 +24,19 @@ private val Context.settingsStore: DataStore<Preferences> by preferencesDataStor
 
 object Keys {
     val appTheme = intPreferencesKey("app_theme_pref")
-    val darkMode = booleanPreferencesKey("dark_mode")
+    val darkMode = intPreferencesKey("dark_mode_pref")
     val incognito = booleanPreferencesKey("incognito")
 }
 
 enum class AppTheme {
     Default,
     Dynamic
+}
+
+enum class Theme {
+    Light,
+    Dark,
+    System
 }
 
 @Inject
@@ -60,10 +62,12 @@ class SettingsStore(
         }
     }
 
-    val appTheme by preferenceStateFlow<Int, AppTheme>(Keys.appTheme, AppTheme.Default) {
+    val appTheme by preferenceStateFlow(Keys.appTheme, AppTheme.Default) {
         AppTheme.entries.getOrNull(it) ?: AppTheme.Default
     }
-    val darkMode by preferenceStateFlow(Keys.darkMode, true)
+    val theme by preferenceStateFlow(Keys.darkMode, Theme.System) {
+        Theme.entries.getOrNull(it) ?: Theme.System
+    }
     val incognito by preferenceStateFlow(Keys.incognito, true)
 
     suspend fun edit(

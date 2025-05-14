@@ -42,33 +42,3 @@ class MetroViewModelFactory(
     }
 }
 
-val LocalMetroPresenterFactory = staticCompositionLocalOf<PresenterFactory> { error("") }
-
-interface PresenterFactory {
-    fun <T: Presenter> create(modelClass: Class<T>, navController: NavController): T
-}
-
-/**
- * A [ViewModelProvider.Factory] that uses an injected map of [KClass] to [Provider] of [ViewModel]
- * to create ViewModels.
- */
-@ContributesBinding(AppScope::class)
-@Inject
-class MetroPresenterFactory(
-    private val appGraph: AppGraph,
-): PresenterFactory {
-
-    override fun <T : Presenter> create(modelClass: Class<T>, navController: NavController): T {
-        val presenterGraph = createGraphFactory<PresenterGraph.Factory>()
-            .create(appGraph, navController)
-
-        println(presenterGraph.presenterProviders)
-
-        val provider =
-            presenterGraph.presenterProviders[modelClass.kotlin]
-                ?: throw IllegalArgumentException("Unknown model class $modelClass")
-
-        @Suppress("NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
-        return modelClass.cast(provider())
-    }
-}

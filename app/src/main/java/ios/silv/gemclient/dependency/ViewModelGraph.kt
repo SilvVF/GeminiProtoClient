@@ -46,21 +46,3 @@ interface ViewModelGraph {
         ): ViewModelGraph
     }
 }
-
-@Immutable
-interface Presenter
-
-@DependencyGraph(PresenterScope::class)
-interface PresenterGraph {
-
-    @Multibinds
-    val presenterProviders: Map<KClass<out Presenter>, Provider<Presenter>>
-
-    @DependencyGraph.Factory
-    fun interface Factory {
-        fun create(
-            @Extends appGraph: AppGraph,
-            @Provides navController: NavController,
-        ): PresenterGraph
-    }
-}

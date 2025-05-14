@@ -1,5 +1,5 @@
 kotlin version: 2.1.20
-error message: java.lang.IllegalStateException: No matching provider function found for ios/silv/gemclient/dependency/AppGraph.navigator
+error message: java.lang.IllegalStateException: No matching provider function found for ios/silv/gemclient/dependency/AppGraph.database
 	at dev.zacsweers.metro.compiler.ir.transformers.ProviderFactory.<init>(ProviderFactory.kt:52)
 	at dev.zacsweers.metro.compiler.ir.transformers.ProvidesTransformer.externalProviderFactoryFor(ProvidesTransformer.kt:598)
 	at dev.zacsweers.metro.compiler.ir.transformers.DependencyGraphTransformer.getOrComputeDependencyGraphNode(DependencyGraphTransformer.kt:316)
@@ -58,8 +58,7 @@ error message: java.lang.IllegalStateException: No matching provider function fo
 	at org.jetbrains.kotlin.daemon.CompileServiceImplBase.execIncrementalCompiler(CompileServiceImpl.kt:678)
 	at org.jetbrains.kotlin.daemon.CompileServiceImplBase.access$execIncrementalCompiler(CompileServiceImpl.kt:92)
 	at org.jetbrains.kotlin.daemon.CompileServiceImpl.compile(CompileServiceImpl.kt:1805)
-	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
-	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at jdk.internal.reflect.GeneratedMethodAccessor14.invoke(Unknown Source)
 	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
 	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
 	at java.rmi/sun.rmi.server.UnicastServerRef.dispatch(UnicastServerRef.java:360)

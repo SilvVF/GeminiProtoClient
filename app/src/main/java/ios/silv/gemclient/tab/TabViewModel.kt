@@ -44,7 +44,11 @@ class TabViewModel(
         .distinctUntilChanged()
         .map { (tab, activePage) ->
             when {
-                tab == null -> TabState.Error
+                tab == null -> TabState.Error.also {
+                    navigator.navCmds.tryEmit {
+                        popBackStack()
+                    }
+                }
                 activePage == null -> TabState.NoPages
                 else -> TabState.Loaded(StablePage(activePage))
             }
