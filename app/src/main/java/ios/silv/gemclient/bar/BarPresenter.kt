@@ -28,6 +28,7 @@ import ios.silv.gemclient.base.toRouteOrNull
 import ios.silv.gemclient.dependency.Presenter
 import ios.silv.gemclient.dependency.PresenterKey
 import ios.silv.gemclient.dependency.PresenterScope
+import ios.silv.gemclient.lib.rin.LaunchedRetainedEffect
 import ios.silv.gemclient.types.StablePage
 import ios.silv.gemclient.types.StableTab
 import ios.silv.gemclient.ui.EventEffect
@@ -98,7 +99,7 @@ class BarPresenter(
                 }
         }
 
-        LaunchedEffect(tabs) {
+        LaunchedRetainedEffect(tabs) {
             val newTabs = updateListPreserveOrder(
                 orderedTabs,
                 tabs.map { (tab, page) ->
