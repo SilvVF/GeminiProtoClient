@@ -46,7 +46,7 @@ class TabViewModel(
             when {
                 tab == null -> TabState.Error.also {
                     navigator.navCmds.tryEmit {
-                        popBackStack()
+                        popBackStack(geminiTab, inclusive = true)
                     }
                 }
                 activePage == null -> TabState.NoPages

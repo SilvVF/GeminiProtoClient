@@ -16,6 +16,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.toRoute
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
+import io.github.takahirom.rin.collectAsRetainedState
 import io.github.takahirom.rin.rememberRetained
 import ios.silv.core_android.log.logcat
 import ios.silv.database_android.dao.TabsDao
@@ -69,6 +70,8 @@ class BarPresenter(
         }
     }
 
+    private val tabsWithActivePageFlow = tabsDao.observeTabsWithActivePage()
+
     @Composable
     fun present(events: EventFlow<BarEvent>): BarState {
 
@@ -79,6 +82,7 @@ class BarPresenter(
         }
 
         val navBackStackEntry by navController.currentBackStackEntryAsState()
+        val tabs by tabsWithActivePageFlow.collectAsRetainedState(emptyList())
 
         val visibleTab by produceState<GeminiTab?>(null) {
             snapshotFlow { navBackStackEntry }.filterNotNull()
@@ -94,28 +98,21 @@ class BarPresenter(
                 }
         }
 
-        LaunchedEffect(Unit) {
-            combine(
-                previewCache.invalidated.onEach { logcat { "invalidated" } },
-                tabsDao.observeTabsWithActivePage(),
-                ::Pair
-            ).collect { (_, tabs) ->
-                logcat { "new items = $tabs" }
-                val newTabs = updateListPreserveOrder(
-                    orderedTabs,
-                    tabs.map { (tab, page) ->
-                        Triple(
-                            StableTab(tab),
-                            StablePage(page),
-                            previewCache.readFromCache(tab.tid)?.toUri().toString()
-                        )
-                    }
-                )
-                logcat { "Created new tabs $newTabs" }
+        LaunchedEffect(tabs) {
+            val newTabs = updateListPreserveOrder(
+                orderedTabs,
+                tabs.map { (tab, page) ->
+                    Triple(
+                        StableTab(tab),
+                        StablePage(page),
+                        previewCache.readFromCache(tab.tid)?.toUri().toString()
+                    )
+                }
+            )
+            logcat { "Created new tabs $newTabs" }
 
-                orderedTabs.clear()
-                orderedTabs.addAll(newTabs)
-            }
+            orderedTabs.clear()
+            orderedTabs.addAll(newTabs)
         }
 
 

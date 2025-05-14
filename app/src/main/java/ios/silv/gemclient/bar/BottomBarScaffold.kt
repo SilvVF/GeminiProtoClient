@@ -183,7 +183,7 @@ fun BottombarScaffold(
                 WindowInsets.safeContent.only(WindowInsetsSides.Bottom)
             )
     ) {
-        Box(Modifier.weight(1f)) {
+        Box(Modifier.weight(1f, true)) {
             CompositionLocalProvider(
                 LocalBarMode provides barMode
             ) {

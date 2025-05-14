@@ -78,9 +78,7 @@ class ComposeNavigator {
 
                 launchSingleTop = true
 
-                popUpTo(
-                    route = dest::class
-                ) {
+                popUpTo(route = dest::class) {
                     inclusive = true
                 }
             }
