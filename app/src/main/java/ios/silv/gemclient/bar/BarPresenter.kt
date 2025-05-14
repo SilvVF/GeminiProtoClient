@@ -1,5 +1,6 @@
 package ios.silv.gemclient.bar
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -8,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.core.net.toUri
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -31,6 +33,7 @@ import ios.silv.gemclient.ui.EventFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import java.io.File
 
 @ContributesIntoMap(PresenterScope::class)
@@ -68,7 +71,7 @@ class BarPresenter(
         var query by rememberRetained { mutableStateOf("") }
 
         val orderedTabs = rememberRetained {
-            mutableStateListOf<Triple<StableTab, StablePage?, File?>>()
+            mutableStateListOf<Triple<StableTab, StablePage?, String?>>()
         }
 
         val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -104,7 +107,7 @@ class BarPresenter(
 
         LaunchedEffect(Unit) {
             combine(
-                previewCache.invalidated,
+                previewCache.invalidated.onEach { logcat { "invalidated" } },
                 tabsDao.observeTabsWithActivePage(),
                 ::Pair
             ).collect { (_, tabs)  ->
@@ -115,8 +118,6 @@ class BarPresenter(
                         Pair(
                             StableTab(t),
                             if (p == null) {
-                                // 1
-                                // 2
                                 null
                             } else {
                                 StablePage(p)
@@ -127,7 +128,13 @@ class BarPresenter(
                 orderedTabs.clear()
                 orderedTabs.addAll(
                     newTabs.map { (tab, page) ->
-                        Triple(tab, page, previewCache.readFromCache(tab.id))
+                        Triple(
+                            tab,
+                            page,
+                            previewCache.readFromCache(tab.id)?.toUri()?.toString().orEmpty()
+                        )
+                    }.also {
+                        logcat { "Read new tabs $it" }
                     }
                 )
             }

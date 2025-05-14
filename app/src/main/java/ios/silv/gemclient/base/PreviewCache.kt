@@ -6,25 +6,29 @@ import dev.zacsweers.metro.Inject
 import ios.silv.core_android.log.LogPriority
 import ios.silv.core_android.log.logcat
 import ios.silv.core_android.suspendRunCatching
+import ios.silv.database_android.dao.TabsDao
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.log
 
 @Inject
 class PreviewCache(
-    context: Context
+    context: Context,
 ) {
 
     private val cacheDir = File(context.cacheDir, "tab_preview")
 
-    private val _invalidated = MutableSharedFlow<Unit>()
-    val invalidated = _invalidated.asSharedFlow().onStart {
-        emit(Unit)
-    }
+    private val _invalidated = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val invalidated = _invalidated.asSharedFlow()
+        .conflate()
+        .onStart { emit(Unit) }
 
     suspend fun cleanCache(tabIds: List<Long>): Boolean = withContext(Dispatchers.IO) {
         suspendRunCatching {
@@ -51,19 +55,21 @@ class PreviewCache(
 
     private fun fileKey(tabId: Long) = "tab_$tabId.png"
 
-    suspend fun writeToCache(tabId: Long, bitmap: Bitmap): Result<File> = withContext(Dispatchers.IO) {
-        suspendRunCatching {
-            cacheDir.mkdirs()
-            File(cacheDir, fileKey(tabId)).also { f ->
-                f.outputStream().use { os ->
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, os)
+    suspend fun writeToCache(tabId: Long, bitmap: Bitmap): Result<File> =
+        withContext(Dispatchers.IO) {
+            suspendRunCatching {
+                cacheDir.mkdirs()
+                File(cacheDir, fileKey(tabId)).also { f ->
+                    f.outputStream().use { os ->
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, os)
+                    }
                 }
             }
+                .onSuccess {
+                    logcat { "Successfully wrote to cache tab_id=${tabId}" }
+                    _invalidated.tryEmit(Unit)
+                }
         }
-            .onSuccess {
-                _invalidated.tryEmit(Unit)
-            }
-    }
 
     fun readFromCache(tabId: Long): File? {
         return File(cacheDir, fileKey(tabId)).takeIf { it.exists() }

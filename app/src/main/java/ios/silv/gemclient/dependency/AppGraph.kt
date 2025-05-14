@@ -30,7 +30,7 @@ abstract class AppGraph {
 
     @SingleIn(AppScope::class)
     @Provides
-    val previewCache: PreviewCache by lazy { PreviewCache(app) }
+    val previewCache: PreviewCache by lazy { PreviewCache(app).also { logcat { "created cache" } } }
 
     @SingleIn(AppScope::class)
     @Provides

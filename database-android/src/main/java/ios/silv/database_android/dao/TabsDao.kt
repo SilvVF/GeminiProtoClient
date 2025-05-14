@@ -5,13 +5,15 @@ import ios.silv.sqldelight.Page
 import ios.silv.sqldelight.Tab
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
 
 internal object TabMapper {
 
     val tabsWithPageMapper =
-        { tabId: Long, activePageId: Long?, pageId: Long?, pageTabId: Long?, url: String?, prevPage: Long? ->
+        { tabId: Long, activePageId: Long?, updatedAt: Long, pageId: Long?, pageTabId: Long?, url: String?, prevPage: Long? ->
             Pair(
-                Tab(tabId, activePageId),
+                Tab(tabId, activePageId, updatedAt),
                 if (pageId != null && pageTabId != null && url != null) {
                     Page(tabId, pageTabId, url, prevPage)
                 } else {
@@ -79,6 +81,16 @@ class TabsDao(
             }
 
             deletedPage != null
+        }
+    }
+
+    @OptIn(ExperimentalTime::class)
+    suspend fun updatePreviewImageUpdatedAt(tabId: Long) {
+        return databaseHandler.await {
+            tabQueries.updatePrevImageUpdatedAt(
+                updatedAt = Clock.System.now().epochSeconds,
+                id = tabId
+            )
         }
     }
 

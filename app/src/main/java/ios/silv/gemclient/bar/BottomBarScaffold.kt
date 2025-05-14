@@ -97,6 +97,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -120,6 +121,7 @@ import androidx.compose.ui.unit.min
 import androidx.core.view.HapticFeedbackConstantsCompat
 import androidx.core.view.ViewCompat
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import io.github.takahirom.rin.rememberRetained
 import ios.silv.core_android.log.logcat
 import ios.silv.gemclient.R
@@ -375,7 +377,7 @@ private fun TabReorderGrid(
 private fun LazyGridItemScope.TabPreviewItem(
     reorderableLazyGridState: ReorderableLazyGridState,
     tab: StableTab,
-    previewImage: File?,
+    previewImage: String?,
     activePage: StablePage?,
     swipeToDismissState: SwipeToDismissBoxState,
     isTop: Boolean,
@@ -458,7 +460,11 @@ private fun LazyGridItemScope.TabPreviewItem(
                         CloseIconButton(onClose)
                     }
                     AsyncImage(
-                        model = previewImage,
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(previewImage)
+                            .memoryCacheKey("${previewImage}_${tab.previewUpdatedAt}")
+                            .diskCacheKey("${previewImage}_${tab.previewUpdatedAt}")
+                            .build(),
                         contentDescription = null,
                         contentScale = ContentScale.FillWidth,
                         modifier = Modifier

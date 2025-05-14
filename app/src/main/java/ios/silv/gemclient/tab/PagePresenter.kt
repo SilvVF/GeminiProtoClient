@@ -49,7 +49,7 @@ class PagePresenter(
 ) : Presenter {
 
     @Stable
-    private data class RetainedResponse(private val result: Result<Response>?): RetainedObserver {
+    private data class RetainedResponse(private val result: Result<Response>?) : RetainedObserver {
 
         var value by mutableStateOf(result)
 
@@ -84,8 +84,15 @@ class PagePresenter(
                 PageEvent.Submit -> {
                     tabsDao.insertPage(page.tabId, page.url + "?query=${input}")
                 }
+
                 is PageEvent.PreviewSaved -> {
-                    previewCache.writeToCache(tabId = page.tabId, event.bitmap.asAndroidBitmap())
+                    logcat { "writing preview to cache ${page.tabId}" }
+                    previewCache.writeToCache(
+                        tabId = page.tabId,
+                        bitmap = event.bitmap.asAndroidBitmap()
+                    ).onSuccess {
+                        tabsDao.updatePreviewImageUpdatedAt(page.tabId)
+                    }
                 }
             }
         }
