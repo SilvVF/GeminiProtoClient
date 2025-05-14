@@ -23,6 +23,7 @@ import ios.silv.gemclient.GeminiHome
 import ios.silv.gemclient.GeminiTab
 import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.base.PreviewCache
+import ios.silv.gemclient.base.toRouteOrNull
 import ios.silv.gemclient.dependency.Presenter
 import ios.silv.gemclient.dependency.PresenterKey
 import ios.silv.gemclient.dependency.PresenterScope
@@ -30,10 +31,13 @@ import ios.silv.gemclient.types.StablePage
 import ios.silv.gemclient.types.StableTab
 import ios.silv.gemclient.ui.EventEffect
 import ios.silv.gemclient.ui.EventFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import java.io.File
 
 @ContributesIntoMap(PresenterScope::class)
@@ -46,10 +50,10 @@ class BarPresenter(
     private val navController: NavController,
 ) : Presenter {
 
-    private fun updateListPreserveOrder(
-        prev: List<Pair<StableTab, StablePage?>>,
-        new: List<Pair<StableTab, StablePage?>>
-    ): List<Pair<StableTab, StablePage?>> {
+    private fun <T> updateListPreserveOrder(
+        prev: List<Triple<StableTab, StablePage?, T>>,
+        new: List<Triple<StableTab, StablePage?, T>>
+    ): List<Triple<StableTab, StablePage?, T>> {
 
         val newValues = new.groupBy { (tab) -> tab.id }
         val updated = prev.mapNotNull { (tab) -> newValues[tab.id]?.firstOrNull() }
@@ -77,32 +81,17 @@ class BarPresenter(
         val navBackStackEntry by navController.currentBackStackEntryAsState()
 
         val visibleTab by produceState<GeminiTab?>(null) {
-            snapshotFlow { navBackStackEntry }
+            snapshotFlow { navBackStackEntry }.filterNotNull()
+                .map { it.toRouteOrNull<GeminiTab>() }
+                .onEach { value = it }
                 .filterNotNull()
-                .map {
-                    try {
-                        it.toRoute<GeminiTab>()
-                    } catch (e: Exception) {
-                        null
-                    }
-                }
-                .collect {
+                .flatMapLatest {
                     logcat { "active tab $it" }
-                    value = it
+                    tabsDao.observeTabWithActivePage(it.id).filterNotNull()
                 }
-        }
-
-        if (visibleTab != null) {
-            LaunchedEffect(visibleTab) {
-                tabsDao.observeTabWithActivePage(visibleTab?.id ?: return@LaunchedEffect)
-                    .filterNotNull()
-                    .collect { (_, activePage) ->
-                        logcat { "received new active page $activePage" }
-                        if (activePage != null) {
-                            query = activePage.url
-                        }
-                    }
-            }
+                .collect { (_, page) ->
+                    query = page?.url.orEmpty()
+                }
         }
 
         LaunchedEffect(Unit) {
@@ -110,33 +99,22 @@ class BarPresenter(
                 previewCache.invalidated.onEach { logcat { "invalidated" } },
                 tabsDao.observeTabsWithActivePage(),
                 ::Pair
-            ).collect { (_, tabs)  ->
+            ).collect { (_, tabs) ->
                 logcat { "new items = $tabs" }
                 val newTabs = updateListPreserveOrder(
-                    orderedTabs.map { Pair(it.first, it.second) },
-                    tabs.map { (t, p) ->
-                        Pair(
-                            StableTab(t),
-                            if (p == null) {
-                                null
-                            } else {
-                                StablePage(p)
-                            }
-                        )
-                    }
-                )
-                orderedTabs.clear()
-                orderedTabs.addAll(
-                    newTabs.map { (tab, page) ->
+                    orderedTabs,
+                    tabs.map { (tab, page) ->
                         Triple(
-                            tab,
-                            page,
-                            previewCache.readFromCache(tab.id)?.toUri()?.toString().orEmpty()
+                            StableTab(tab),
+                            StablePage(page),
+                            previewCache.readFromCache(tab.tid)?.toUri().toString()
                         )
-                    }.also {
-                        logcat { "Read new tabs $it" }
                     }
                 )
+                logcat { "Created new tabs $newTabs" }
+
+                orderedTabs.clear()
+                orderedTabs.addAll(newTabs)
             }
         }
 

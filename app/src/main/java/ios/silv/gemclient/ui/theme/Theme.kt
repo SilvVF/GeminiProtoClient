@@ -18,78 +18,30 @@ private val DarkColorScheme = darkColorScheme(
     tertiary = Pink80
 )
 
-val DarkMochaColorScheme = darkColorScheme(
+private val DarkMochaColorScheme = darkColorScheme(
     primary = MochaMauve,
     onPrimary = MochaCrust,
-    primaryContainer = MochaLavender,
-    onPrimaryContainer = MochaCrust,
-
     secondary = MochaTeal,
     onSecondary = MochaCrust,
-    secondaryContainer = MochaSurface2,
-    onSecondaryContainer = MochaText,
-
-    tertiary = MochaGreen,
-    onTertiary = MochaCrust,
-    tertiaryContainer = MochaSurface2,
-    onTertiaryContainer = MochaText,
-
     background = MochaBase,
     onBackground = MochaText,
-
     surface = MochaSurface0,
     onSurface = MochaText,
-    surfaceVariant = MochaSurface2,
-    onSurfaceVariant = MochaOverlay1,
-
-    inverseSurface = MochaText,
-    inverseOnSurface = MochaBase,
-
     error = MochaRed,
-    onError = MochaCrust,
-    errorContainer = MochaMaroon,
-    onErrorContainer = MochaCrust,
-
-    outline = MochaOverlay1,
-    outlineVariant = MochaSurface2,
-
-    surfaceTint = MochaMauve
+    onError = MochaCrust
 )
-val LightLatteColorScheme = lightColorScheme(
+
+private val LightLatteColorScheme = lightColorScheme(
     primary = LatteBlue,
     onPrimary = LatteCrust,
-    primaryContainer = LatteLavender,
-    onPrimaryContainer = LatteCrust,
-
     secondary = LatteTeal,
     onSecondary = LatteCrust,
-    secondaryContainer = LatteSurface1,
-    onSecondaryContainer = LatteText,
-
-    tertiary = LatteGreen,
-    onTertiary = LatteCrust,
-    tertiaryContainer = LatteSurface1,
-    onTertiaryContainer = LatteText,
-
     background = LatteBase,
     onBackground = LatteText,
-
     surface = LatteSurface0,
     onSurface = LatteText,
-    surfaceVariant = LatteSurface2,
-    onSurfaceVariant = LatteOverlay1,
-
-    inverseSurface = LatteText,
-    inverseOnSurface = LatteBase,
-
     error = LatteRed,
-    onError = LatteCrust,
-    errorContainer = LatteFlamingo,
-    onErrorContainer = LatteCrust,
-
-    outline = LatteOverlay1,
-    outlineVariant = LatteSurface2,
-    surfaceTint = LatteBlue
+    onError = LatteCrust
 )
 
 @Composable

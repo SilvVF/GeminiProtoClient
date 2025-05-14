@@ -15,3 +15,11 @@ data class StablePage(
         page.prev_page
     )
 }
+
+fun StablePage(page: Page?): StablePage? {
+    return if(page == null) {
+        null
+    } else {
+        StablePage(page)
+    }
+}

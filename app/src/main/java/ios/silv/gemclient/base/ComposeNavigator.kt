@@ -1,6 +1,7 @@
 package ios.silv.gemclient.base
 
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.serialization.SerializationException
 import kotlin.coroutines.suspendCoroutine
 
 /***
@@ -39,6 +41,12 @@ val LocalNavigator = staticCompositionLocalOf<ComposeNavigator> { error("") }
 val LocalNavController = staticCompositionLocalOf<NavController> { error("") }
 
 typealias NavCmd = NavController.() -> Unit
+
+inline fun <reified T> NavBackStackEntry.toRouteOrNull(): T? = try {
+    toRoute(T::class)
+} catch (e: SerializationException) {
+    null
+}
 
 class ComposeNavigator {
 
