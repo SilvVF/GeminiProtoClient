@@ -82,7 +82,7 @@ class AndroidLogcatLogger(minPriority: LogPriority = LogPriority.DEBUG) : Logcat
 
     companion object {
         fun installOnDebuggableApp(application: Application, minPriority: LogPriority = LogPriority.DEBUG) {
-            if (!LogcatLogger.isInstalled && application.isDebuggableApp) {
+            if (!isInstalled && application.isDebuggableApp) {
                 LogcatLogger.install(AndroidLogcatLogger(minPriority))
             }
         }
@@ -124,16 +124,16 @@ private val Application.isDebuggableApp: Boolean
 
 internal actual fun LogcatLogger.installLogger() {
     synchronized(LogcatLogger.Companion) {
-        if (isInstalled) {
-            logger.log(
+        if (LogcatLogger.Companion.isInstalled) {
+            log(
                 LogPriority.ERROR,
                 "LogcatLogger",
                 "Installing $logger even though a logger was previously installed here: " +
                         installedThrowable!!.asLog()
             )
         }
-        installedThrowable = RuntimeException("Previous logger installed here")
-        LogcatLogger.Companion.logger = logger
+        LogcatLogger.Companion.installedThrowable = RuntimeException("Previous logger installed here")
+        LogcatLogger.Companion.logger = this
     }
 }
 

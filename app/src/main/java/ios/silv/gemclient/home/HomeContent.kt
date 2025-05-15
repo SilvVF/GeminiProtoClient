@@ -90,7 +90,6 @@ private fun GeminiHomeContent(
             modifier = Modifier.padding(paddingValues),
             navBlock = {
                 TerminalSection(
-                    modifier = Modifier.fillMaxSize(),
                     label = {
                         TerminalSectionDefaults.Label("nav")
                     }
@@ -145,9 +144,7 @@ private fun TerminalItemsBlock(
     item: @Composable (url: String) -> Unit,
 ) {
     TerminalSection(
-        modifier = Modifier
-            .height(IntrinsicSize.Min)
-            .fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         label = {
             TerminalSectionDefaults.Label(
                 text = label
@@ -155,8 +152,7 @@ private fun TerminalItemsBlock(
         }
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth().padding(6.dp)
+            modifier = Modifier.fillMaxWidth().padding(6.dp)
         ) {
             if (urls.isEmpty()) {
                 Text(
@@ -169,7 +165,7 @@ private fun TerminalItemsBlock(
                 )
             }
             urls.fastForEach {
-               item(it)
+                item(it)
             }
         }
     }
@@ -198,9 +194,7 @@ private fun HomeTopAppBar(
             val navigator = LocalNavigator.current
             TerminalSectionButton(
                 modifier = Modifier
-                    .padding(start = 4.dp)
-                    .width(IntrinsicSize.Min)
-                    .height(IntrinsicSize.Min),
+                    .padding(start = 4.dp),
                 containerColor = containerColor,
                 label = {
                     TerminalSectionDefaults.Label("settings", color = containerColor)
@@ -216,9 +210,7 @@ private fun HomeTopAppBar(
             }
             TerminalSectionButton(
                 modifier = Modifier
-                    .padding(start = 4.dp)
-                    .width(IntrinsicSize.Min)
-                    .height(IntrinsicSize.Min),
+                    .padding(start = 4.dp),
                 containerColor = containerColor,
                 label = {
                     TerminalSectionDefaults.Label("incog", color = containerColor)

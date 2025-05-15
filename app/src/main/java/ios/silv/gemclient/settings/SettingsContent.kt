@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -177,10 +178,7 @@ fun NavGraphBuilder.geminiSettingsDestination() {
                     },
                     actions = {
                         TerminalSectionButton(
-                            modifier = Modifier
-                                .padding(start = 4.dp)
-                                .width(IntrinsicSize.Min)
-                                .height(IntrinsicSize.Min),
+                            modifier = Modifier.padding(start = 4.dp),
                             label = {
                                 TerminalSectionDefaults.Label("home")
                             },
@@ -194,10 +192,7 @@ fun NavGraphBuilder.geminiSettingsDestination() {
                             )
                         }
                         TerminalSectionButton(
-                            modifier = Modifier
-                                .padding(start = 4.dp)
-                                .width(IntrinsicSize.Min)
-                                .height(IntrinsicSize.Min),
+                            modifier = Modifier.padding(start = 4.dp),
                             label = {
                                 TerminalSectionDefaults.Label("nav")
                             },
@@ -223,16 +218,14 @@ fun NavGraphBuilder.geminiSettingsDestination() {
         ) { paddingValues ->
             DraggableNavLayout(
                 draggableState = navDragState,
-                modifier = Modifier
-                    .padding(paddingValues),
+                modifier = Modifier.padding(paddingValues),
                 navBlock = {
                     TerminalSection(
-                        modifier = Modifier.fillMaxSize(),
                         label = {
                             TerminalSectionDefaults.Label("nav")
                         }
                     ) {
-                        LazyColumn(Modifier.fillMaxSize()) {
+                        LazyColumn(Modifier.fillMaxHeight()) {
                             itemsIndexed(settingsItems) { i, item ->
                                 TextButton(
                                     onClick = {
@@ -266,8 +259,6 @@ fun NavGraphBuilder.geminiSettingsDestination() {
                             key = { item -> item.label }
                         ) { item ->
                             TerminalSection(
-                                modifier = Modifier
-                                    .height(IntrinsicSize.Min),
                                 label = {
                                     TerminalSectionDefaults.Label(item.label)
                                 }

@@ -75,6 +75,7 @@ import ios.silv.gemini.ContentNode
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 @Composable
@@ -189,13 +190,15 @@ fun DraggableNavLayout(
         val navP = navM.measure(
             constraints.copy(
                 minWidth = 0,
-                maxWidth = NavBlockSize.roundToPx()
+                maxWidth = NavBlockSize.roundToPx(),
+                maxHeight = constraints.maxHeight
             )
         )
         val stdoutP = stdoutM.measure(
             constraints.copy(
                 minWidth = 0,
-                maxWidth = constraints.maxWidth - offset
+                maxWidth = constraints.maxWidth - offset,
+                maxHeight = constraints.maxHeight
             )
         )
 
@@ -215,7 +218,6 @@ private fun PageLoadedContent(
     val listState = rememberLazyListState()
 
     DraggableNavLayout(
-        modifier = Modifier.fillMaxSize(),
         navBlock = {
             NavBlock(
                 listState = listState,
@@ -244,7 +246,6 @@ private fun NavBlock(
 ) {
     val scope = rememberCoroutineScope()
     TerminalSection(
-        modifier = Modifier,
         label = {
             TerminalSectionDefaults.Label("nav")
         }
@@ -271,9 +272,7 @@ private fun NavBlock(
                 }
         }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize()
-        ) {
+        LazyColumn {
             items(
                 headings
             ) { node ->
@@ -347,7 +346,6 @@ private fun StdOutBlock(
                     val scrollToTopVisible by listState.sampleScrollingState()
 
                     LazyColumn(
-                        Modifier.fillMaxSize(),
                         state = listState
                     ) {
                         for ((node, key, contentType) in pageState.nodes) {

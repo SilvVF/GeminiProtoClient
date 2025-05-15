@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.contentColorFor
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
@@ -58,8 +59,9 @@ private class TerminalLayoutMeasurePolicy(
         measurables: List<Measurable>,
         constraints: Constraints
     ): MeasureResult {
-
-        assert(measurables.size == 3) { "to many measurables passed to terminal layout" }
+        require(measurables.size == 3) {
+            "Expected exactly 3 measurables: content, label, wrapper"
+        }
 
         val contentMeasurable = measurables[0]
         val labelMeasurable = measurables[1]
@@ -67,70 +69,68 @@ private class TerminalLayoutMeasurePolicy(
 
         val labelPlaceable = labelMeasurable.measure(
             constraints.copy(
-                minHeight = 0,
-                minWidth = 0,
-                maxWidth = constraints.maxWidth,
-                maxHeight = labelMeasurable.minIntrinsicHeight(constraints.maxWidth)
+                minWidth = labelMeasurable.minIntrinsicWidth(constraints.maxHeight)
             )
         )
-
-        val availableHeight = if (constraints.hasBoundedHeight) {
-            constraints.maxHeight
+        val availableContentHeight = if (constraints.hasBoundedHeight) {
+            (constraints.maxHeight - (labelPlaceable.height + labelPlaceable.height / 2)).coerceAtLeast(0)
         } else {
-            // fallback for unbounded height: size to content
-            val contentPlaceable = contentMeasurable.measure(
-                constraints.copy(minHeight = 0)
-            )
-            contentPlaceable.height
+            Constraints.Infinity
+        }
+
+        val availableContentWidth = if (constraints.hasBoundedWidth) {
+            // -1 dp for border
+            (constraints.maxWidth).coerceAtLeast(0) - 1.dp.roundToPx()
+        } else {
+            Constraints.Infinity
         }
 
 
-        val availableWidth = if (constraints.hasBoundedWidth) {
-            constraints.maxWidth
-        } else {
-            maxOf(
-                contentMeasurable.minIntrinsicWidth(
-                    availableHeight - labelPlaceable.height - (labelPlaceable.height / 2)
-                ),
-                labelPlaceable.width + (labelOffset.x.roundToPx() * 2)
-            )
-        }
-
-        val contentPlaceable = contentMeasurable.measure(
-            constraints.copy(
-                minHeight = 0,
-                maxHeight = minOf(
-                    availableHeight - labelPlaceable.height - (labelPlaceable.height / 2),
-                    constraints.maxHeight
-                ).coerceAtLeast(0),
-                minWidth = 0,
-                maxWidth = availableWidth.coerceAtLeast(0)
-            )
+        val contentConstraints = constraints.copy(
+            minWidth = 0,
+            maxWidth = availableContentWidth,
+            minHeight = 0,
+            maxHeight = availableContentHeight
         )
 
-        val layoutHeight =
-            minOf(
-                labelPlaceable.height + contentPlaceable.height + labelPlaceable.height / 2,
-                constraints.maxHeight
-            )
-
-        val wrapperPlaceable = wrapperMeasurable.measure(
-            constraints.copy(
-                minHeight = 0,
-                maxHeight = (layoutHeight - labelPlaceable.height / 2).coerceAtLeast(0),
-                minWidth = 0,
-                maxWidth = availableWidth.coerceAtLeast(0)
-            )
+        val contentPlaceable = contentMeasurable.measure(contentConstraints)
+        val layoutWidth = maxOf(
+            (labelOffset.x.roundToPx() * 2) + labelPlaceable.width,
+            contentPlaceable.width,
+            constraints.minWidth
         )
 
-        return layout(availableWidth, layoutHeight) {
-            wrapperPlaceable.place(0, labelPlaceable.height / 2)
+        val layoutHeight = maxOf(
+            labelOffset.y.roundToPx() +
+                labelPlaceable.height + (labelPlaceable.height / 2) +
+                contentPlaceable.height,
+            constraints.minHeight
+        )
+
+        val wrapperMaxHeight = (layoutHeight - labelPlaceable.height / 2).coerceAtLeast(0)
+        val wrapperConstraints = constraints.copy(
+            minWidth = 0,
+            minHeight = 0,
+            maxWidth = layoutWidth,
+            maxHeight = wrapperMaxHeight
+        )
+        val wrapperPlaceable = wrapperMeasurable.measure(wrapperConstraints)
+
+        return layout(layoutWidth, layoutHeight) {
+
+            wrapperPlaceable.place(
+                0,
+                layoutHeight - wrapperMaxHeight
+            )
+
             labelPlaceable.place(
-                labelOffset.x.roundToPx(), labelOffset.y.roundToPx()
+                labelOffset.x.roundToPx(),
+                labelOffset.y.roundToPx()
             )
+
             contentPlaceable.place(
-                ((availableWidth - contentPlaceable.width) / 2),
-                labelPlaceable.height
+                (layoutWidth  - contentPlaceable.width) / 2,
+                (layoutHeight + labelPlaceable.height / 2 - contentPlaceable.height) / 2
             )
         }
     }
@@ -149,7 +149,7 @@ fun TerminalSectionButton(
 ) {
     val cc = MaterialTheme.colorScheme.contentColorFor(containerColor)
     Layout(
-        modifier = modifier,
+        modifier = modifier.minimumInteractiveComponentSize(),
         content = {
             CompositionLocalProvider(
                 LocalContentColor provides cc

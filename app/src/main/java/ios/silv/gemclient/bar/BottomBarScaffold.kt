@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -226,11 +227,6 @@ fun BottombarScaffold(
                 visible = { it == BarMode.EDITING },
             ) {
                 TerminalSectionButton(
-                    modifier = Modifier
-                        .padding(end = TerminalSectionDefaults.horizontalPadding)
-                        .padding(bottom = 6.dp)
-                        .width(IntrinsicSize.Min)
-                        .height(IntrinsicSize.Min),
                     label = {
                         TerminalSectionDefaults.Label("add")
                     },
@@ -238,10 +234,11 @@ fun BottombarScaffold(
                         events.tryEmit(CreateBlankTab)
                     },
                 ) {
-                    Box(Modifier.height(48.dp).width(92.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.width(92.dp).height(48.dp)) {
                         Icon(
                             imageVector = Icons.Filled.Add,
-                            contentDescription = null
+                            contentDescription = null,
+                            modifier = Modifier.align(Alignment.Center),
                         )
                     }
                 }
@@ -381,7 +378,6 @@ private fun LazyGridItemScope.TabPreviewItem(
         ) {
             TerminalSection(
                 modifier = Modifier
-                    .height(IntrinsicSize.Min)
                     .padding(horizontal = TerminalSectionDefaults.horizontalPadding)
                     .background(MaterialTheme.colorScheme.background),
                 label = {
