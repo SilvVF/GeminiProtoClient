@@ -15,7 +15,7 @@ import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import io.github.takahirom.rin.collectAsRetainedState
 import io.github.takahirom.rin.rememberRetained
-import ios.silv.core_android.log.logcat
+import ios.silv.core.logcat.logcat
 import ios.silv.database.dao.TabsDao
 import ios.silv.gemclient.GeminiHome
 import ios.silv.gemclient.GeminiTab

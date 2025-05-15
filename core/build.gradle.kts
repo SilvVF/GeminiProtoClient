@@ -9,7 +9,7 @@ kotlin {
     // which platforms this KMP module supports.
     // See: https://kotlinlang.org/docs/multiplatform-discover-project.html#targets
     androidLibrary {
-        namespace = "ios.silv.shared"
+        namespace = "ios.silv.core"
         compileSdk = 35
         minSdk = 24
 
@@ -30,7 +30,7 @@ kotlin {
     // A step-by-step guide on how to include this library in an XCode
     // project can be found here:
     // https://developer.android.com/kotlin/multiplatform/migrate
-    val xcfName = "sharedKit"
+    val xcfName = "coreKit"
 
     iosX64 {
         binaries.framework {
@@ -58,8 +58,6 @@ kotlin {
     sourceSets {
         commonMain {
             dependencies {
-                implementation(project(":core"))
-
                 implementation(libs.kotlin.stdlib)
                 // Add KMP dependencies here
                 implementation(libs.kotlin.coroutines.core)
@@ -98,4 +96,5 @@ kotlin {
             }
         }
     }
+
 }

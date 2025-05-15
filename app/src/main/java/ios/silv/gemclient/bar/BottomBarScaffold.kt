@@ -102,7 +102,7 @@ import androidx.core.view.ViewCompat
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import io.github.takahirom.rin.rememberRetained
-import ios.silv.core_android.log.logcat
+import ios.silv.core.logcat.logcat
 import ios.silv.gemclient.R
 import ios.silv.gemclient.bar.BarEvent.CreateBlankTab
 import ios.silv.gemclient.bar.BarEvent.CreateNewPage

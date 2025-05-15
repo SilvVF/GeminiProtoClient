@@ -5,9 +5,10 @@ import android.graphics.Bitmap
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
-import ios.silv.core_android.log.LogPriority
-import ios.silv.core_android.log.logcat
-import ios.silv.core_android.suspendRunCatching
+import ios.silv.core.logcat.LogPriority
+import ios.silv.core.logcat.LogPriority.*
+import ios.silv.core.logcat.logcat
+import ios.silv.core.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -43,7 +44,7 @@ class PreviewCache @Inject constructor(
                         f.delete()
                     }
                 } catch (e: Exception) {
-                    logcat(LogPriority.ERROR) { "error trying to check file $f" }
+                    logcat(ERROR) { "error trying to check file $f" }
                 }
             }
         }

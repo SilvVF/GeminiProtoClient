@@ -3,42 +3,19 @@ package ios.silv.gemclient.base
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
-import androidx.navigation.NavDestination.Companion.hasRoute
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import dev.zacsweers.metro.AppScope
-import dev.zacsweers.metro.ContributesTo
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
-import ios.silv.core_android.log.logcat
-import ios.silv.gemclient.GeminiHome
-import ios.silv.gemclient.Screen
+import ios.silv.core.logcat.logcat
 import ios.silv.gemclient.TopLevelDest
-import ios.silv.gemclient.dependency.PresenterScope
-import ios.silv.gemclient.dependency.ViewModelScope
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.onStart
-import kotlinx.coroutines.flow.onSubscription
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.supervisorScope
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.SerializationException
-import kotlin.coroutines.suspendCoroutine
 
 /***
  *  Default provided for convince in previews
@@ -55,7 +32,8 @@ inline fun <reified T> NavBackStackEntry.toRouteOrNull(): T? = try {
 }
 
 @SingleIn(AppScope::class)
-class ComposeNavigator @Inject constructor() {
+@Inject
+class ComposeNavigator {
 
     val navCmds = MutableSharedFlow<NavCmd>(extraBufferCapacity = Int.MAX_VALUE)
 

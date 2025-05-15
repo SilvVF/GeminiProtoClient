@@ -1,21 +1,16 @@
 package ios.silv.gemini
 
 import android.content.Context
-import io.ktor.http.escapeIfNeeded
-import io.ktor.utils.io.core.copyTo
-import ios.silv.core_android.log.logcat
+import ios.silv.core.logcat.logcat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.io.Sink
 import kotlinx.io.Source
 import kotlinx.io.asSink
 import kotlinx.io.buffered
 import kotlinx.io.writeString
-import okio.buffer
-import okio.sink
 import java.io.File
 import java.security.MessageDigest
 import java.util.PriorityQueue

@@ -1,9 +1,9 @@
-package ios.silv.core_android
-
+package ios.silv.core
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingCommand
@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.jvm.JvmName
 
 @JvmName("mutate_List")
 fun <T> MutableStateFlow<List<T>>.mutate(update: MutableList<T>.() -> Unit) {
@@ -27,6 +28,7 @@ fun <K, V> MutableStateFlow<Map<K, V>>.mutate(update: MutableMap<K, V>.() -> Uni
     }
 }
 
+@OptIn(ExperimentalForInheritanceCoroutinesApi::class)
 class MutableStateFlowList<T: Any>(
     value: List<T>
 ) : MutableStateFlow<List<T>> by MutableStateFlow(value) {
@@ -70,6 +72,7 @@ public interface Restartable {
  * the emission of the upstream flow. It functions just like a regular [StateFlow], but with the
  * added ability to restart the upstream emission when needed.
  */
+@OptIn(ExperimentalForInheritanceCoroutinesApi::class)
 public interface RestartableStateFlow<out T> : StateFlow<T>, Restartable {
 
     /**
@@ -119,6 +122,7 @@ private data class SharingRestartableImpl(
     }
 }
 
+@OptIn(ExperimentalForInheritanceCoroutinesApi::class)
 class MutableStateFlowMap<K: Any, V: Any>(
     value: Map<K, V>
 ) : MutableStateFlow<Map<K, V>> by MutableStateFlow(value) {

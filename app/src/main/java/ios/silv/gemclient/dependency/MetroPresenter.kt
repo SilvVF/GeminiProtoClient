@@ -17,7 +17,7 @@ import dev.zacsweers.metro.Multibinds
 import dev.zacsweers.metro.Provider
 import dev.zacsweers.metro.Provides
 import dev.zacsweers.metro.createGraphFactory
-import ios.silv.core_android.log.logcat
+import ios.silv.core.logcat.logcat
 import ios.silv.gemclient.base.LocalNavController
 import kotlin.reflect.KClass
 

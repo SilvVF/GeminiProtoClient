@@ -1,7 +1,6 @@
 package ios.silv.gemclient
 
 import android.app.Application
-import androidx.lifecycle.lifecycleScope
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -10,11 +9,10 @@ import coil3.request.allowHardware
 import coil3.request.crossfade
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.createGraphFactory
-import ios.silv.core_android.log.AndroidLogcatLogger
-import ios.silv.core_android.log.LogPriority
-import ios.silv.core_android.suspendRunCatching
+import ios.silv.core.logcat.AndroidLogcatLogger
+import ios.silv.core.logcat.LogPriority
+import ios.silv.core.suspendRunCatching
 import ios.silv.database.dao.TabsDao
-import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.base.PreviewCache
 import ios.silv.gemclient.dependency.AppGraph
 import kotlinx.coroutines.CoroutineScope

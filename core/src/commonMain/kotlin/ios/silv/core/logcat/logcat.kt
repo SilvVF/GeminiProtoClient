@@ -1,90 +1,13 @@
-package ios.silv.core_android.log
+package ios.silv.core.logcat
 
-
-import android.annotation.SuppressLint
-import java.io.PrintWriter
-import java.io.StringWriter
-import android.app.Application
-import android.content.pm.ApplicationInfo
-import android.os.Build
-import android.util.Log
-import kotlin.math.min
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlin.concurrent.Volatile
+import kotlin.math.log
 
 private const val MAX_LOG_LENGTH = 4000
 private const val MAX_TAG_LENGTH = 23
-
-/**
- * A [logcat] logger that delegates to [android.util.Log] for any log with a priority of
- * at least [minPriorityInt], and is otherwise a no-op.
- *
- * Handles special cases for [LogPriority.ASSERT] (which requires sending to Log.wtf) and
- * splitting logs to be at most 4000 characters per line (otherwise logcat just truncates).
- *
- * Call [installOnDebuggableApp] to make sure you never log in release builds.
- *
- * The implementation is based on Timber DebugTree.
- */
-class AndroidLogcatLogger(minPriority: LogPriority = LogPriority.DEBUG) : LogcatLogger {
-
-    private val minPriorityInt: Int = minPriority.priorityInt
-
-    override fun isLoggable(priority: LogPriority): Boolean =
-        priority.priorityInt >= minPriorityInt
-
-    @SuppressLint("ObsoleteSdkInt")
-    override fun log(
-        priority: LogPriority,
-        tag: String,
-        message: String
-    ) {
-        // Tag length limit was removed in API 26.
-        val trimmedTag = if (tag.length <= MAX_TAG_LENGTH || Build.VERSION.SDK_INT >= 26) {
-            tag
-        } else {
-            tag.substring(0, MAX_TAG_LENGTH)
-        }
-
-        if (message.length < MAX_LOG_LENGTH) {
-            logToLogcat(priority.priorityInt, trimmedTag, message)
-            return
-        }
-
-        // Split by line, then ensure each line can fit into Log's maximum length.
-        var i = 0
-        val length = message.length
-        while (i < length) {
-            var newline = message.indexOf('\n', i)
-            newline = if (newline != -1) newline else length
-            do {
-                val end = min(newline, i + MAX_LOG_LENGTH)
-                val part = message.substring(i, end)
-                logToLogcat(priority.priorityInt, trimmedTag, part)
-                i = end
-            } while (i < newline)
-            i++
-        }
-    }
-
-    private fun logToLogcat(
-        priority: Int,
-        tag: String,
-        part: String
-    ) {
-        if (priority == Log.ASSERT) {
-            Log.wtf(tag, part)
-        } else {
-            Log.println(priority, tag, part)
-        }
-    }
-
-    companion object {
-        fun installOnDebuggableApp(application: Application, minPriority: LogPriority = LogPriority.DEBUG) {
-            if (!LogcatLogger.isInstalled && application.isDebuggableApp) {
-                LogcatLogger.install(AndroidLogcatLogger(minPriority))
-            }
-        }
-    }
-}
 
 /**
  * A tiny Kotlin API for cheap logging on top of Android's normal `Log` class.
@@ -165,6 +88,9 @@ inline fun logcat(
     }
 }
 
+internal expect fun LogcatLogger.installLogger()
+internal expect fun uninstallLogger()
+
 /**
  * Logger that [logcat] delegates to. Call [install] to install a new logger, the default is a
  * no-op logger. Calling [uninstall] falls back to the default no-op logger.
@@ -189,13 +115,13 @@ interface LogcatLogger {
     )
 
     companion object {
+
         @Volatile
         @PublishedApi
         internal var logger: LogcatLogger = NoLog
-            private set
 
         @Volatile
-        private var installedThrowable: Throwable? = null
+        internal var installedThrowable: Throwable? = null
 
         val isInstalled: Boolean
             get() = installedThrowable != null
@@ -207,28 +133,14 @@ interface LogcatLogger {
          * however doing this won't throw, it'll log an error to the newly provided logger.
          */
         fun install(logger: LogcatLogger) {
-            synchronized(this) {
-                if (isInstalled) {
-                    logger.log(
-                        LogPriority.ERROR,
-                        "LogcatLogger",
-                        "Installing $logger even though a logger was previously installed here: " +
-                                installedThrowable!!.asLog()
-                    )
-                }
-                installedThrowable = RuntimeException("Previous logger installed here")
-                Companion.logger = logger
-            }
+            logger.installLogger()
         }
 
         /**
          * Replaces the current logger (if any) with a no-op logger.
          */
         fun uninstall() {
-            synchronized(this) {
-                installedThrowable = null
-                logger = NoLog
-            }
+            uninstallLogger()
         }
     }
     /**
@@ -242,16 +154,16 @@ interface LogcatLogger {
             println("$tag $message")
         }
     }
+}
 
-    private object NoLog : LogcatLogger {
-        override fun isLoggable(priority: LogPriority) = false
+internal object NoLog : LogcatLogger {
+    override fun isLoggable(priority: LogPriority) = false
 
-        override fun log(
-            priority: LogPriority,
-            tag: String,
-            message: String
-        ) = error("Should never receive any log")
-    }
+    override fun log(
+        priority: LogPriority,
+        tag: String,
+        message: String
+    ) = error("Should never receive any log")
 }
 
 /**
@@ -262,27 +174,11 @@ interface LogcatLogger {
  * - No silent swallowing of UnknownHostException.
  * - The buffer size is 256 bytes instead of the default 16 bytes.
  */
-fun Throwable.asLog(): String {
-    val stringWriter = StringWriter(256)
-    val printWriter = PrintWriter(stringWriter, false)
-    printStackTrace(printWriter)
-    printWriter.flush()
-    return stringWriter.toString()
-}
+expect fun Throwable.asLog(): String
 
 
 @PublishedApi
-internal fun Any.outerClassSimpleNameInternalOnlyDoNotUseKThxBye(): String {
-    val javaClass = this::class.java
-    val fullClassName = javaClass.name
-    val outerClassName = fullClassName.substringBefore('$')
-    val simplerOuterClassName = outerClassName.substringAfterLast('.')
-    return if (simplerOuterClassName.isEmpty()) {
-        fullClassName
-    } else {
-        simplerOuterClassName.removeSuffix("Kt")
-    }
-}
+expect internal fun Any.outerClassSimpleNameInternalOnlyDoNotUseKThxBye(): String
 
 enum class LogPriority(
     val priorityInt: Int
@@ -294,6 +190,3 @@ enum class LogPriority(
     ERROR(6),
     ASSERT(7);
 }
-
-private val Application.isDebuggableApp: Boolean
-    get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0

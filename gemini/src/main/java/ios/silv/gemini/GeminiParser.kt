@@ -3,9 +3,7 @@ package ios.silv.gemini
 import io.ktor.http.ContentType
 import io.ktor.utils.io.CancellationException
 import io.ktor.utils.io.charsets.forName
-import io.ktor.utils.io.core.copy
 import io.ktor.utils.io.core.readText
-import ios.silv.core_android.log.logcat
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf

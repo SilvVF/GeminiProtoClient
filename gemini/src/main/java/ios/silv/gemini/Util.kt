@@ -1,6 +1,5 @@
 package ios.silv.gemini
-
-import ios.silv.core_android.log.logcat
+import ios.silv.core.logcat.logcat
 import kotlinx.io.Source
 import kotlinx.io.readLineStrict
 import java.io.ByteArrayInputStream

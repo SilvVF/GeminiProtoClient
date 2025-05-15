@@ -12,7 +12,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
-import ios.silv.core_android.log.logcat
+import ios.silv.core.logcat.logcat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

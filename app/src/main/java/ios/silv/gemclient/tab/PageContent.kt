@@ -61,9 +61,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import ios.silv.core_android.log.logcat
 import ios.silv.gemclient.dependency.metroPresenter
-import ios.silv.gemclient.lib.capturable.CaptureController
 import ios.silv.gemclient.lib.capturable.capturable
 import ios.silv.gemclient.lib.capturable.rememberCaptureController
 import ios.silv.gemclient.lib.rin.LaunchedRetainedEffect

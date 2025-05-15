@@ -40,7 +40,7 @@ dependencies {
     implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.network.tls)
 
-    implementation(libs.kotlinx.serialization.json)
+    implementation(project(":core"))
 
-    api(project(":core-android"))
+    implementation(libs.kotlinx.serialization.json)
 }
