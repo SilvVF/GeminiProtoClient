@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="libgemini">
+    <output-path>$PROJECT_DIR$/libgemini/build/libs</output-path>
+    <root id="archive" name="libgemini.jar">
+      <element id="module-output" name="GemClient.libgemini.androidMain" />
+    </root>
+  </artifact>
+</component>

@@ -1,10 +1,9 @@
 package ios.silv.gemclient.tab
 
-import android.graphics.Picture
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import ios.silv.gemclient.ui.UiState
-import ios.silv.gemini.ContentNode
+import ios.silv.libgemini.gemini.ContentNode
 import java.util.UUID
 
 sealed interface PageState : UiState {

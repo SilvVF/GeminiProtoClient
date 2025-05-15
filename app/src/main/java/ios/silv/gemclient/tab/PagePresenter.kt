@@ -2,10 +2,7 @@ package ios.silv.gemclient.tab
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.ProduceStateScope
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -32,10 +29,10 @@ import ios.silv.gemclient.tab.PageState.Content.UiNode
 import ios.silv.gemclient.types.StablePage
 import ios.silv.gemclient.ui.EventEffect
 import ios.silv.gemclient.ui.EventFlow
-import ios.silv.gemini.GeminiClient
-import ios.silv.gemini.GeminiCode
-import ios.silv.gemini.GeminiParser
-import ios.silv.gemini.Response
+import ios.silv.libgemini.gemini.GeminiClient
+import ios.silv.libgemini.gemini.GeminiCode
+import ios.silv.libgemini.gemini.GeminiParser
+import ios.silv.libgemini.gemini.Response
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -43,11 +40,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 
@@ -142,7 +136,7 @@ class PagePresenter(
                 .distinctUntilChanged()
                 .mapLatest { res ->
                     logcat { "received new res $res" }
-                    value = if (res == null || res.status == GeminiCode.StatusInput) {
+                    value = if (res == null || res.status == GeminiCode.INPUT) {
                         emptyList()
                     } else {
                         GeminiParser.parse(page.url, res)
@@ -159,7 +153,7 @@ class PagePresenter(
             else -> {
                 res.fold(
                     onSuccess = {
-                        if (it.status == GeminiCode.StatusInput) {
+                        if (it.status == GeminiCode.INPUT) {
                             PageState.Input(input)
                         } else {
                             PageState.Content(parsedNodes)

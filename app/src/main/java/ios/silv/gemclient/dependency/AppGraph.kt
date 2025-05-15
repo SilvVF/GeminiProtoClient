@@ -17,8 +17,9 @@ import ios.silv.database.dao.TabsDao
 import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.base.PreviewCache
 import ios.silv.gemclient.settings.SettingsStore
-import ios.silv.gemini.GeminiCache
-import ios.silv.gemini.GeminiClient
+import ios.silv.libgemini.gemini.GeminiCache
+import ios.silv.libgemini.gemini.GeminiClient
+import ios.silv.libgemini.gemini.IGeminiCache
 import kotlin.reflect.KClass
 
 @DependencyGraph(AppScope::class, isExtendable = true)
@@ -56,11 +57,11 @@ interface AppGraph {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideGeminiCache(): GeminiCache = GeminiCache(context)
+    fun provideGeminiCache(): IGeminiCache = GeminiCache(context)
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideGeminiClient(cache: GeminiCache): GeminiClient = GeminiClient(cache)
+    fun provideGeminiClient(cache: IGeminiCache): GeminiClient = GeminiClient(cache)
 
     /**
      * A multibinding map of activity classes to their providers accessible for

@@ -61,7 +61,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":gemini"))
+    implementation(project(":libgemini"))
     implementation(project(":database"))
     implementation(project(":core"))
 

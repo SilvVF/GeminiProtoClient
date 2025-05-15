@@ -24,7 +24,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "GemClient"
 include(":app")
-include(":gemini")
 include(":shared")
 include(":database")
 include(":core")
+include(":libgemini")

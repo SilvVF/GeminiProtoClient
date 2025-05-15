@@ -35,7 +35,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -47,14 +46,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.drawscope.draw
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
@@ -71,11 +64,10 @@ import ios.silv.gemclient.ui.components.TerminalSection
 import ios.silv.gemclient.ui.components.TerminalSectionDefaults
 import ios.silv.gemclient.ui.rememberEventFlow
 import ios.silv.gemclient.ui.sampleScrollingState
-import ios.silv.gemini.ContentNode
+import ios.silv.libgemini.gemini.ContentNode
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
-import kotlin.math.max
 import kotlin.math.roundToInt
 
 @Composable
@@ -274,7 +266,7 @@ private fun NavBlock(
 
         LazyColumn {
             items(
-                headings
+                items = headings
             ) { node ->
                 TextButton(
                     onClick = {
