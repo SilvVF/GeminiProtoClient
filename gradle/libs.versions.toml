@@ -20,6 +20,7 @@ ksp = "2.1.21-2.0.1"
 
 composeUi = "1.8.1"
 compose = "1.8.1"
+composeMultiplatform = "1.8.0"
 reorderable = "2.4.3"
 
 composeNav = "2.9.0"
@@ -42,6 +43,7 @@ androidx-material3 = { module = "androidx.compose.material3:material3", version.
 androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashscreen" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-datastore = { module = "androidx.datastore:datastore-preferences", version.ref="datastore" }
+androidx-datastore-core = { module = "androidx.datastore:datastore-preferences-core", version.ref="datastore" }
 
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
@@ -60,7 +62,8 @@ compose-ui-unit= { module = "androidx.compose.ui:ui-unit", version.ref= "compose
 compose-ui-geometry= { module = "androidx.compose.ui:ui-geometry", version.ref= "composeUi"}
 compose-ui-tooling= { module = "androidx.compose.ui:ui-tooling", version.ref= "composeUi"}
 
-compose-runtime= { module = "androidx.compose.runtime:runtime", version.ref= "compose"}
+jetbrains-compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
+compose-runtime = { module = "androidx.compose.runtime:runtime", version.ref= "compose"}
 compose-foundation= { module = "androidx.compose.foundation:foundation", version.ref= "compose"}
 compose-foundation-layout = { module = "androidx.compose.foundation:foundation-layout", version.ref= "compose"}
 compose-animation = { module = "androidx.compose.animation:animation" , version.ref= "compose"}

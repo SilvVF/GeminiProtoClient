@@ -1,6 +1,6 @@
-package ios.silv.gemclient.settings
+package ios.silv.shared.settings
 
-import android.content.Context
+import androidx.compose.runtime.Stable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
@@ -8,11 +8,11 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import ios.silv.core.logcat.logcat
+import ios.silv.shared.datastore.Keys
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,22 +22,15 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlin.concurrent.Volatile
 
-private val Context.settingsStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
-
-object Keys {
-    val appTheme = intPreferencesKey("app_theme_pref")
-    val darkMode = intPreferencesKey("dark_mode_pref")
-    val incognito = booleanPreferencesKey("incognito")
-    val recentlyViewed = stringSetPreferencesKey("recently_viewed_links")
-    val bookmarked = stringSetPreferencesKey("bookmarked_links")
-}
-
+@Stable
 enum class AppTheme {
     Default,
     Dynamic
 }
 
+@Stable
 enum class Theme {
     Light,
     Dark,
@@ -46,10 +39,10 @@ enum class Theme {
 
 @SingleIn(AppScope::class)
 class SettingsStore @Inject constructor(
-    context: Context
+    dataStore: DataStore<Preferences>
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val store = context.settingsStore
+    private val store = dataStore
 
     @Volatile
     var initialized = false

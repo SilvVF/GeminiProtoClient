@@ -34,12 +34,12 @@ import ios.silv.gemclient.dependency.LocalMetroPresenterFactory
 import ios.silv.gemclient.dependency.PresenterFactory
 import ios.silv.gemclient.dependency.metroPresenter
 import ios.silv.gemclient.home.geminiHomeDestination
-import ios.silv.gemclient.settings.AppTheme
-import ios.silv.gemclient.settings.SettingsStore
 import ios.silv.gemclient.settings.geminiSettingsDestination
 import ios.silv.gemclient.tab.geminiTabDestination
 import ios.silv.gemclient.ui.rememberEventFlow
 import ios.silv.gemclient.ui.theme.GemClientTheme
+import ios.silv.shared.settings.AppTheme
+import ios.silv.shared.settings.SettingsStore
 import kotlinx.coroutines.launch
 
 

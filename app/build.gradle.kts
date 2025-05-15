@@ -63,6 +63,7 @@ android {
 dependencies {
     implementation(project(":libgemini"))
     implementation(project(":database"))
+    implementation(project(":shared"))
     implementation(project(":core"))
 
     implementation(libs.androidx.core.ktx)

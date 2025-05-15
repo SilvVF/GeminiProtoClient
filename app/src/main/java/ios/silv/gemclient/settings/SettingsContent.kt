@@ -65,6 +65,8 @@ import ios.silv.gemclient.ui.components.TerminalSection
 import ios.silv.gemclient.ui.components.TerminalSectionButton
 import ios.silv.gemclient.ui.components.TerminalSectionDefaults
 import ios.silv.gemclient.ui.rememberEventFlow
+import ios.silv.shared.settings.AppTheme
+import ios.silv.shared.settings.Theme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds

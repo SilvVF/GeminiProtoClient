@@ -14,9 +14,9 @@ import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.dependency.Presenter
 import ios.silv.gemclient.dependency.PresenterKey
 import ios.silv.gemclient.dependency.PresenterScope
-import ios.silv.gemclient.settings.SettingsStore
 import ios.silv.gemclient.ui.EventEffect
 import ios.silv.gemclient.ui.EventFlow
+import ios.silv.shared.settings.SettingsStore
 
 
 @ContributesIntoMap(PresenterScope::class)

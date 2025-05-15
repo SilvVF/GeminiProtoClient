@@ -23,8 +23,6 @@ import ios.silv.gemclient.dependency.PresenterScope
 import ios.silv.gemclient.lib.rin.LaunchedRetainedEffect
 import ios.silv.gemclient.lib.rin.produceRetainedState
 import ios.silv.gemclient.lib.rin.rememberRetained
-import ios.silv.gemclient.settings.Keys
-import ios.silv.gemclient.settings.SettingsStore
 import ios.silv.gemclient.tab.PageState.Content.UiNode
 import ios.silv.gemclient.types.StablePage
 import ios.silv.gemclient.ui.EventEffect
@@ -33,6 +31,8 @@ import ios.silv.libgemini.gemini.GeminiClient
 import ios.silv.libgemini.gemini.GeminiCode
 import ios.silv.libgemini.gemini.GeminiParser
 import ios.silv.libgemini.gemini.Response
+import ios.silv.shared.datastore.Keys
+import ios.silv.shared.settings.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

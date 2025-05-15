@@ -1,6 +1,9 @@
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kotlin.multiplatform.library)
+    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.metro)
 }
 
 kotlin {
@@ -49,7 +52,12 @@ kotlin {
             baseName = xcfName
         }
     }
-
+    composeCompiler {
+        reportsDestination = layout.buildDirectory.dir("compose_compiler")
+        stabilityConfigurationFiles.add(
+            rootProject.layout.projectDirectory.file("stability_config.conf")
+        )
+    }
     // Source set declarations.
     // Declaring a target automatically creates a source set with the same name. By default, the
     // Kotlin Gradle Plugin creates additional source sets that depend on each other, since it is
@@ -59,10 +67,16 @@ kotlin {
         commonMain {
             dependencies {
                 implementation(project(":core"))
+                implementation(project(":libgemini"))
+                implementation(project(":database"))
 
                 implementation(libs.kotlin.stdlib)
                 // Add KMP dependencies here
                 implementation(libs.kotlin.coroutines.core)
+
+                implementation(libs.rin)
+                implementation(libs.androidx.datastore.core)
+                implementation(libs.jetbrains.compose.runtime)
             }
         }
 

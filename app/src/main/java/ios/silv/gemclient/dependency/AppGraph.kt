@@ -2,6 +2,9 @@ package ios.silv.gemclient.dependency
 
 import android.app.Activity
 import android.content.Context
+import android.provider.ContactsContract.Data
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import app.cash.sqldelight.db.SqlDriver
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.DependencyGraph
@@ -16,10 +19,11 @@ import ios.silv.database.DatabaseHandlerImpl
 import ios.silv.database.dao.TabsDao
 import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.base.PreviewCache
-import ios.silv.gemclient.settings.SettingsStore
 import ios.silv.libgemini.gemini.GeminiCache
 import ios.silv.libgemini.gemini.GeminiClient
 import ios.silv.libgemini.gemini.IGeminiCache
+import ios.silv.shared.datastore.createDataStoreAndroid
+import ios.silv.shared.settings.SettingsStore
 import kotlin.reflect.KClass
 
 @DependencyGraph(AppScope::class, isExtendable = true)
@@ -42,6 +46,10 @@ interface AppGraph {
         db = databaseMp,
         driver = driver
     )
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun provideDataStore(): DataStore<Preferences> = createDataStoreAndroid(context)
 
     @Provides
     @SingleIn(AppScope::class)

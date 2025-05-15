@@ -7,7 +7,6 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -46,7 +45,6 @@ interface UiEvent
 @Stable
 interface UiState
 
-@OptIn(ExperimentalForInheritanceCoroutinesApi::class)
 @Stable
 class EventFlow<T: UiEvent>(
     replay: Int = 0,
