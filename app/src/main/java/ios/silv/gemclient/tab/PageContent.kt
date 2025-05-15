@@ -66,6 +66,7 @@ import ios.silv.gemclient.dependency.metroPresenter
 import ios.silv.gemclient.lib.capturable.CaptureController
 import ios.silv.gemclient.lib.capturable.capturable
 import ios.silv.gemclient.lib.capturable.rememberCaptureController
+import ios.silv.gemclient.lib.rin.LaunchedRetainedEffect
 import ios.silv.gemclient.ui.EventFlow
 import ios.silv.gemclient.ui.components.TerminalScrollToTop
 import ios.silv.gemclient.ui.components.TerminalSection
@@ -317,8 +318,19 @@ private fun StdOutBlock(
     pageEvents: EventFlow<PageEvent>,
     listState: LazyListState,
 ) {
-    val scope = rememberCoroutineScope()
     val captureController = rememberCaptureController()
+    val scope = rememberCoroutineScope()
+
+    LaunchedRetainedEffect(pageState.nodesOrNull) {
+        if (pageState.nodesOrNull != null) {
+            val bitmapAsync = captureController.captureAsync()
+            runCatching {
+                val bitmap = bitmapAsync.await()
+                pageEvents.tryEmit(PageEvent.PreviewSaved(bitmap))
+            }
+        }
+    }
+
 
     TerminalSection(
         modifier = Modifier.padding(horizontal = TerminalSectionDefaults.horizontalPadding),
@@ -328,16 +340,6 @@ private fun StdOutBlock(
     ) {
         when (pageState) {
             is PageState.Content -> {
-                LaunchedEffect(pageState.nodes) {
-                    scope.launch {
-                        val bitmapAsync = captureController.captureAsync()
-                        runCatching {
-                            val bitmap = bitmapAsync.await()
-                            pageEvents.tryEmit(PageEvent.PreviewSaved(bitmap))
-                        }
-                    }
-                }
-
                 Box(
                     modifier = Modifier
                         .fillMaxSize()

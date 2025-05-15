@@ -92,10 +92,11 @@ fun LaunchedRetainedEffect(vararg inputs: Any?, action: suspend () -> Unit) {
     val callback by rememberUpdatedState(action)
     rememberRetained(*inputs) {
         object : RetainedObserver, CoroutineScope {
-            override val coroutineContext: CoroutineContext = Job() + Dispatchers.Main.immediate
+            val job = Job()
+            override val coroutineContext: CoroutineContext = job + Dispatchers.Main.immediate
 
             override fun onForgotten() {
-                cancel()
+                job.cancel()
             }
 
             override fun onRemembered() {

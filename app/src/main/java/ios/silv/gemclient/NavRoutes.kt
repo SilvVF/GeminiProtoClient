@@ -15,7 +15,6 @@ data class GeminiTab(
     val id: Long
 ): Screen
 
-
 @Serializable
 data object GeminiSettings: TopLevelDest
 

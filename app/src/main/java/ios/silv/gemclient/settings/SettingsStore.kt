@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.zacsweers.metro.Inject
 import ios.silv.core_android.log.logcat
@@ -26,6 +27,8 @@ object Keys {
     val appTheme = intPreferencesKey("app_theme_pref")
     val darkMode = intPreferencesKey("dark_mode_pref")
     val incognito = booleanPreferencesKey("incognito")
+    val recentlyViewed = stringSetPreferencesKey("recently_viewed_links")
+    val bookmarked = stringSetPreferencesKey("bookmarked_links")
 }
 
 enum class AppTheme {
@@ -69,6 +72,8 @@ class SettingsStore(
         Theme.entries.getOrNull(it) ?: Theme.System
     }
     val incognito by preferenceStateFlow(Keys.incognito, true)
+    val recentlyViewed by preferenceStateFlow(Keys.recentlyViewed, emptySet())
+    val bookmarked by preferenceStateFlow(Keys.bookmarked, emptySet())
 
     suspend fun edit(
         transform: suspend (MutablePreferences) -> Unit

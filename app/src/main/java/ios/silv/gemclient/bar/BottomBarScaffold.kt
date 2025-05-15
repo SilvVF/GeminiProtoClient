@@ -23,14 +23,18 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -54,6 +58,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxState
@@ -118,6 +123,7 @@ import ios.silv.gemclient.ui.EventFlow
 import ios.silv.gemclient.ui.components.TerminalSection
 import ios.silv.gemclient.ui.components.TerminalSectionButton
 import ios.silv.gemclient.ui.components.TerminalSectionDefaults
+import ios.silv.gemclient.ui.conditional
 import ios.silv.gemclient.ui.isImeVisibleAsState
 import ios.silv.gemclient.ui.nonGoogleRetardProgress
 import sh.calvin.reorderable.ReorderableItem
@@ -138,7 +144,7 @@ fun BottombarScaffold(
     state: BarState,
     events: EventFlow<BarEvent>,
     modifier: Modifier = Modifier,
-    content: @Composable BoxScope.() -> Unit
+    content: @Composable () -> Unit
 ) {
     val barMode = rememberRetained { MutableTransitionState(BarMode.NONE) }
 
@@ -174,41 +180,57 @@ fun BottombarScaffold(
             BarMode.NONE
         }
     }
-
-
-    Column(
+    Scaffold(
         modifier
-            .fillMaxSize()
-            .windowInsetsPadding(
-                WindowInsets.safeContent.only(WindowInsetsSides.Bottom)
-            )
-    ) {
-        Box(Modifier.weight(1f, true)) {
-            CompositionLocalProvider(
-                LocalBarMode provides barMode
+            .fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            AnimatedVisibility(
+                visible = state.showSearchbar,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight()
             ) {
-                content()
+                BottomSearchBar(
+                    barModeTransition = barModeTransition,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.safeContent.only(WindowInsetsSides.Bottom)),
+                    focusRequester = focusRequester,
+                    onFocusChanged = { focusState ->
+                        if (focusState.hasFocus) {
+                            barMode.targetState = BarMode.SEARCHING
+                        }
+                    },
+                    onHomeClicked = {
+                        events.tryEmit(BarEvent.GoToHome)
+                    },
+                    searchText = state.query,
+                    onTextChanged = {
+                        events.tryEmit(SearchChanged(it))
+                    },
+                    tabsCount = state.tabs.size,
+                    onSearch = {
+                        val tab = state.activeTab
+                        if (tab != null) {
+                            events.tryEmit(CreateNewPage(tab.id))
+                        } else {
+                            events.tryEmit(CreateNewTab)
+                        }
+                    },
+                    toggleEditing = {
+                        barMode.targetState = if (barMode.currentState == BarMode.EDITING) {
+                            BarMode.NONE
+                        } else {
+                            BarMode.EDITING
+                        }
+                    }
+                )
             }
-            barModeTransition.AnimatedVisibility(
-                modifier = Modifier.matchParentSize(),
-                visible = { it == BarMode.EDITING },
-            ) {
-                Surface(
-                    modifier = Modifier.matchParentSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    TabReorderGrid(
-                        state = state,
-                        events = events,
-                        lazyGridState = lazyGridState,
-                        barMode = barMode,
-                        reorderableLazyGridState = reorderableLazyGridState
-                    )
-                }
-            }
+        },
+        floatingActionButton = {
             barModeTransition.AnimatedVisibility(
                 visible = { it == BarMode.EDITING },
-                modifier = Modifier.align(Alignment.BottomEnd)
             ) {
                 TerminalSectionButton(
                     modifier = Modifier
@@ -232,43 +254,32 @@ fun BottombarScaffold(
                 }
             }
         }
-        AnimatedVisibility(
-            visible = state.showSearchbar,
-            modifier = Modifier.fillMaxWidth().wrapContentHeight()
+    ) { paddingValues ->
+        Box(
+            Modifier.padding(paddingValues)
         ) {
-            BottomSearchBar(
-                barModeTransition = barModeTransition,
-                modifier = Modifier.fillMaxWidth(),
-                focusRequester = focusRequester,
-                onFocusChanged = { focusState ->
-                    if (focusState.hasFocus) {
-                        barMode.targetState = BarMode.SEARCHING
-                    }
-                },
-                onHomeClicked = {
-                    events.tryEmit(BarEvent.GoToHome)
-                },
-                searchText = state.query,
-                onTextChanged = {
-                    events.tryEmit(SearchChanged(it))
-                },
-                tabsCount = state.tabs.size,
-                onSearch = {
-                    val tab = state.activeTab
-                    if (tab != null) {
-                        events.tryEmit(CreateNewPage(tab.id))
-                    } else {
-                        events.tryEmit(CreateNewTab)
-                    }
-                },
-                toggleEditing = {
-                    barMode.targetState = if (barMode.currentState == BarMode.EDITING) {
-                        BarMode.NONE
-                    } else {
-                        BarMode.EDITING
-                    }
+            CompositionLocalProvider(
+                LocalBarMode provides barMode
+            ) {
+                content()
+            }
+            barModeTransition.AnimatedVisibility(
+                modifier = Modifier.matchParentSize(),
+                visible = { it == BarMode.EDITING },
+            ) {
+                Surface(
+                    modifier = Modifier.matchParentSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    TabReorderGrid(
+                        state = state,
+                        events = events,
+                        lazyGridState = lazyGridState,
+                        barMode = barMode,
+                        reorderableLazyGridState = reorderableLazyGridState
+                    )
                 }
-            )
+            }
         }
     }
 }
@@ -303,7 +314,7 @@ private fun TabReorderGrid(
         modifier = Modifier.fillMaxSize(),
         state = lazyGridState,
         columns = GridCells.Fixed(2),
-        contentPadding = WindowInsets.systemBars.asPaddingValues(),
+        contentPadding = WindowInsets.systemBars.asPaddingValues()
     ) {
         itemsIndexed(
             items = state.tabs,
