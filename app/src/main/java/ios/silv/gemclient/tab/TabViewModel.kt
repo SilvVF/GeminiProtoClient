@@ -6,18 +6,15 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
-import ios.silv.database_android.dao.TabsDao
+import ios.silv.database.dao.TabsDao
 import ios.silv.gemclient.GeminiTab
 import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.dependency.ViewModelKey
 import ios.silv.gemclient.dependency.ViewModelScope
-import ios.silv.gemclient.settings.Keys
-import ios.silv.gemclient.settings.SettingsStore
 import ios.silv.gemclient.types.StablePage
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 

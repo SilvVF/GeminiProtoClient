@@ -1,8 +1,6 @@
 package ios.silv.gemclient.bar
 
-import android.net.Uri
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -13,13 +11,12 @@ import androidx.core.net.toUri
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.toRoute
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import io.github.takahirom.rin.collectAsRetainedState
 import io.github.takahirom.rin.rememberRetained
 import ios.silv.core_android.log.logcat
-import ios.silv.database_android.dao.TabsDao
+import ios.silv.database.dao.TabsDao
 import ios.silv.gemclient.GeminiHome
 import ios.silv.gemclient.GeminiTab
 import ios.silv.gemclient.base.ComposeNavigator
@@ -33,14 +30,10 @@ import ios.silv.gemclient.types.StablePage
 import ios.silv.gemclient.types.StableTab
 import ios.silv.gemclient.ui.EventEffect
 import ios.silv.gemclient.ui.EventFlow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.launch
-import java.io.File
 
 @ContributesIntoMap(PresenterScope::class)
 @PresenterKey(BarPresenter::class)

@@ -8,10 +8,14 @@ import coil3.SingletonImageLoader
 import coil3.imageDecoderEnabled
 import coil3.request.allowHardware
 import coil3.request.crossfade
+import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.createGraphFactory
 import ios.silv.core_android.log.AndroidLogcatLogger
 import ios.silv.core_android.log.LogPriority
 import ios.silv.core_android.suspendRunCatching
+import ios.silv.database.dao.TabsDao
+import ios.silv.gemclient.base.ComposeNavigator
+import ios.silv.gemclient.base.PreviewCache
 import ios.silv.gemclient.dependency.AppGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +29,11 @@ class App : Application(), SingletonImageLoader.Factory {
             .create(this)
     }
 
+    @Inject
+    lateinit var previewCache: PreviewCache
+    @Inject
+    lateinit var tabsDao: TabsDao
+
     override fun onCreate() {
         super.onCreate()
 
@@ -32,7 +41,7 @@ class App : Application(), SingletonImageLoader.Factory {
 
         CoroutineScope(Dispatchers.IO).launch {
             suspendRunCatching {
-                appGraph.previewCache.cleanCache(appGraph.tabsDao.selectTabIds())
+                previewCache.cleanCache(tabsDao.selectTabIds())
             }
         }
     }
@@ -40,7 +49,7 @@ class App : Application(), SingletonImageLoader.Factory {
     override fun newImageLoader(context: PlatformContext): ImageLoader {
         return ImageLoader.Builder(context)
             .crossfade(true)
-            .fetcherCoroutineContext (Dispatchers.IO.limitedParallelism(8))
+            .fetcherCoroutineContext(Dispatchers.IO.limitedParallelism(8))
             .decoderCoroutineContext(Dispatchers.IO.limitedParallelism(3))
             .allowHardware(true)
             .imageDecoderEnabled(true)

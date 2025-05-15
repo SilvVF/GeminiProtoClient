@@ -1,6 +1,8 @@
 package ios.silv.gemclient.dependency
 
 import android.app.Activity
+import android.content.Context
+import android.provider.ContactsContract.Data
 import app.cash.sqldelight.db.SqlDriver
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.DependencyGraph
@@ -8,62 +10,60 @@ import dev.zacsweers.metro.Multibinds
 import dev.zacsweers.metro.Provider
 import dev.zacsweers.metro.Provides
 import dev.zacsweers.metro.SingleIn
+import ios.silv.DatabaseMp
 import ios.silv.core_android.log.logcat
-import ios.silv.database.Database
-import ios.silv.database_android.DatabaseHandler
-import ios.silv.database_android.DatabaseHandlerImpl
-import ios.silv.database_android.DriverFactory
-import ios.silv.database_android.dao.TabsDao
-import ios.silv.gemclient.App
+import ios.silv.database.AndroidSqlDriverFactory
+import ios.silv.database.DatabaseHandler
+import ios.silv.database.DatabaseHandlerImpl
+import ios.silv.database.SqlDriverFactory
+import ios.silv.database.dao.TabsDao
 import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.base.PreviewCache
 import ios.silv.gemclient.settings.SettingsStore
 import ios.silv.gemini.GeminiCache
 import ios.silv.gemini.GeminiClient
+import ios.silv.sqldelight.Tab
 import kotlin.reflect.KClass
 
 
+@SingleIn(AppScope::class)
 @DependencyGraph(AppScope::class, isExtendable = true)
-abstract class AppGraph {
+interface AppGraph {
 
-    abstract val app: App
+    val context: Context
 
-    @SingleIn(AppScope::class)
-    @Provides
-    val previewCache: PreviewCache by lazy { PreviewCache(app).also { logcat { "created cache" } } }
+    val previewCache: PreviewCache
 
-    @SingleIn(AppScope::class)
-    @Provides
-    val provideNavigator: ComposeNavigator = ComposeNavigator()
-
-    @SingleIn(AppScope::class)
-    @Provides
-    val provideSettingsStore: SettingsStore by lazy { SettingsStore(app) }
-
-    @SingleIn(AppScope::class)
-    @Provides
-    val provideDriver: SqlDriver by lazy { DriverFactory(this.app).createDriver() }
-
-    @SingleIn(AppScope::class)
-    @Provides
-    val provideDatabase: Database by lazy { Database(provideDriver) }
+    val composeNavigator: ComposeNavigator
 
     @Provides
     @SingleIn(AppScope::class)
-    val provideDatabaseHandler: DatabaseHandler  by lazy {
-        DatabaseHandlerImpl(provideDatabase, provideDriver)
-    }
+    fun provideDatabaseHandler(
+        databaseMp: DatabaseMp,
+        driver: SqlDriver
+    ): DatabaseHandler = DatabaseHandlerImpl(
+        db = databaseMp,
+        driver = driver
+    )
 
-    @SingleIn(AppScope::class)
     @Provides
-    val tabsDao: TabsDao by lazy { TabsDao(provideDatabaseHandler) }
+    @SingleIn(AppScope::class)
+    fun provideTabsDao(databaseHandler: DatabaseHandler): TabsDao = TabsDao(databaseHandler)
 
-    @SingleIn(AppScope::class)
     @Provides
-    fun provideGeminiCache(): GeminiCache = GeminiCache(app)
+    @SingleIn(AppScope::class)
+    fun provideDriver(): SqlDriver = AndroidSqlDriverFactory(context).create()
 
-    @SingleIn(AppScope::class)
     @Provides
+    @SingleIn(AppScope::class)
+    fun provideDatabase(driver: SqlDriver): DatabaseMp = DatabaseMp(driver)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun provideGeminiCache(): GeminiCache = GeminiCache(context)
+
+    @Provides
+    @SingleIn(AppScope::class)
     fun provideGeminiClient(cache: GeminiCache): GeminiClient = GeminiClient(cache)
 
     /**
@@ -71,11 +71,13 @@ abstract class AppGraph {
      * [MetroAppComponentFactory].
      */
     @Multibinds
-    abstract val activityProviders: Map<KClass<out Activity>, Provider<Activity>>
+    val activityProviders: Map<KClass<out Activity>, Provider<Activity>>
 
     @DependencyGraph.Factory
     fun interface Factory {
-        fun create(@Provides app: App): AppGraph
+        fun create(
+            @Provides context: Context,
+        ): AppGraph
     }
 }
 

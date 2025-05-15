@@ -63,9 +63,7 @@ android {
 dependencies {
     implementation(project(":core-android"))
     implementation(project(":gemini"))
-    implementation(project(":database-android"))
-
-    implementation(kotlin("reflect"))
+    implementation(project(":database"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

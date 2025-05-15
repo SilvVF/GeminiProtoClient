@@ -16,10 +16,9 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import io.github.takahirom.rin.RetainedObserver
-import io.github.takahirom.rin.produceRetainedState
 import io.github.takahirom.rin.rememberRetained
 import ios.silv.core_android.log.logcat
-import ios.silv.database_android.dao.TabsDao
+import ios.silv.database.dao.TabsDao
 import ios.silv.gemclient.base.PreviewCache
 import ios.silv.gemclient.dependency.Presenter
 import ios.silv.gemclient.dependency.PresenterKey

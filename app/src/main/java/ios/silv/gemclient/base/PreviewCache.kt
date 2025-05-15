@@ -2,24 +2,22 @@ package ios.silv.gemclient.base
 
 import android.content.Context
 import android.graphics.Bitmap
+import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import ios.silv.core_android.log.LogPriority
 import ios.silv.core_android.log.logcat
 import ios.silv.core_android.suspendRunCatching
-import ios.silv.database_android.dao.TabsDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
-import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.withContext
 import java.io.File
-import kotlin.math.log
 
-@Inject
-class PreviewCache(
+@SingleIn(AppScope::class)
+class PreviewCache @Inject constructor(
     context: Context,
 ) {
 

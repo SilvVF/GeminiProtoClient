@@ -7,10 +7,16 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.ContributesTo
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import ios.silv.core_android.log.logcat
 import ios.silv.gemclient.GeminiHome
 import ios.silv.gemclient.Screen
 import ios.silv.gemclient.TopLevelDest
+import ios.silv.gemclient.dependency.PresenterScope
+import ios.silv.gemclient.dependency.ViewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
@@ -48,7 +54,8 @@ inline fun <reified T> NavBackStackEntry.toRouteOrNull(): T? = try {
     null
 }
 
-class ComposeNavigator {
+@SingleIn(AppScope::class)
+class ComposeNavigator @Inject constructor() {
 
     val navCmds = MutableSharedFlow<NavCmd>(extraBufferCapacity = Int.MAX_VALUE)
 

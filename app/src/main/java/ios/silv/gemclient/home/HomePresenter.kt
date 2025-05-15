@@ -8,7 +8,7 @@ import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import io.github.takahirom.rin.collectAsRetainedState
 import io.github.takahirom.rin.rememberRetained
-import ios.silv.database_android.dao.TabsDao
+import ios.silv.database.dao.TabsDao
 import ios.silv.gemclient.GeminiTab
 import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.dependency.Presenter

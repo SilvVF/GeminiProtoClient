@@ -1,0 +1,54 @@
+CREATE TABLE IF NOT EXISTS Tab(
+    tid INTEGER PRIMARY KEY,
+    active_page_id INTEGER,
+    prev_image_updated_at INTEGER NOT NULL DEFAULT -1
+);
+
+updatePrevImageUpdatedAt:
+UPDATE Tab SET
+    prev_image_updated_at = :updatedAt
+WHERE tid = :id;
+
+insertTab:
+INSERT INTO Tab(tid, active_page_id)
+VALUES (NULL, :active_page);
+
+lastInsertRowId:
+SELECT last_insert_rowid();
+
+selectTabIds:
+SELECT tid FROM Tab;
+
+deleteById:
+DELETE FROM Tab WHERE tid = :id;
+
+selectTabById:
+SELECT * FROM Tab WHERE tid = :id LIMIT 1;
+
+updateTabActivePage:
+UPDATE Tab SET
+    active_page_id = :activePageId
+WHERE Tab.tid = :id;
+
+selectTabsWithActivePage:
+SELECT T.*, P.pid, P.tab_id, P.url, P.prev_page
+FROM Tab T
+LEFT JOIN Page P ON (
+    P.tab_id = T.tid AND P.pid = T.active_page_id
+);
+
+selectTabWithActivePage:
+SELECT T.*, P.pid, P.tab_id, P.url, P.prev_page
+FROM Tab T
+LEFT JOIN Page P ON (
+    P.tab_id = T.tid AND P.pid = T.active_page_id
+)
+WHERE T.tid = :tabId;
+
+selectTabWithPagesById:
+SELECT T.*, P.pid, P.tab_id, P.url, P.prev_page
+FROM Tab T
+LEFT JOIN Page P ON (
+    P.tab_id = T.tid
+)
+WHERE T.tid = :id;
