@@ -2,7 +2,6 @@ package ios.silv.gemclient.dependency
 
 import android.app.Activity
 import android.content.Context
-import android.provider.ContactsContract.Data
 import app.cash.sqldelight.db.SqlDriver
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.DependencyGraph
@@ -11,22 +10,17 @@ import dev.zacsweers.metro.Provider
 import dev.zacsweers.metro.Provides
 import dev.zacsweers.metro.SingleIn
 import ios.silv.DatabaseMp
-import ios.silv.core_android.log.logcat
 import ios.silv.database.AndroidSqlDriverFactory
 import ios.silv.database.DatabaseHandler
 import ios.silv.database.DatabaseHandlerImpl
-import ios.silv.database.SqlDriverFactory
 import ios.silv.database.dao.TabsDao
 import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.base.PreviewCache
 import ios.silv.gemclient.settings.SettingsStore
 import ios.silv.gemini.GeminiCache
 import ios.silv.gemini.GeminiClient
-import ios.silv.sqldelight.Tab
 import kotlin.reflect.KClass
 
-
-@SingleIn(AppScope::class)
 @DependencyGraph(AppScope::class, isExtendable = true)
 interface AppGraph {
 
@@ -35,6 +29,8 @@ interface AppGraph {
     val previewCache: PreviewCache
 
     val composeNavigator: ComposeNavigator
+
+    val settingsStore: SettingsStore
 
     @Provides
     @SingleIn(AppScope::class)

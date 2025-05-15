@@ -45,8 +45,7 @@ enum class Theme {
 }
 
 @SingleIn(AppScope::class)
-@Inject
-class SettingsStore(
+class SettingsStore @Inject constructor(
     context: Context
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
