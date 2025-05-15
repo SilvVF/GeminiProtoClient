@@ -7,11 +7,11 @@ import androidx.navigation.toRoute
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import ios.silv.database.dao.TabsDao
-import ios.silv.gemclient.GeminiTab
-import ios.silv.gemclient.base.ComposeNavigator
+import ios.silv.shared.GeminiTab
 import ios.silv.gemclient.dependency.ViewModelKey
 import ios.silv.gemclient.dependency.ViewModelScope
 import ios.silv.gemclient.types.StablePage
+import ios.silv.shared.AppComposeNavigator
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 class TabViewModel(
     savedStateHandle: SavedStateHandle,
     private val tabsDao: TabsDao,
-    private val navigator: ComposeNavigator,
+    private val navigator: AppComposeNavigator,
 ) : ViewModel() {
 
     private val geminiTab = savedStateHandle.toRoute<GeminiTab>()

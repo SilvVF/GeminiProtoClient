@@ -1,8 +1,6 @@
-package ios.silv.gemclient.settings
+package ios.silv.shared.settings
 
-import ios.silv.gemclient.ui.UiEvent
-import ios.silv.shared.settings.AppTheme
-import ios.silv.shared.settings.Theme
+import ios.silv.shared.ui.UiEvent
 
 sealed interface SettingsEvent : UiEvent {
     data class ChangeTheme(val theme: Theme) : SettingsEvent

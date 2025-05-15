@@ -10,6 +10,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -26,7 +27,6 @@ import dev.zacsweers.metro.binding
 import ios.silv.gemclient.bar.BarEvent
 import ios.silv.gemclient.bar.BarPresenter
 import ios.silv.gemclient.bar.BottombarScaffold
-import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.base.LocalNavController
 import ios.silv.gemclient.base.LocalNavigator
 import ios.silv.gemclient.dependency.ActivityKey
@@ -36,10 +36,12 @@ import ios.silv.gemclient.dependency.metroPresenter
 import ios.silv.gemclient.home.geminiHomeDestination
 import ios.silv.gemclient.settings.geminiSettingsDestination
 import ios.silv.gemclient.tab.geminiTabDestination
-import ios.silv.gemclient.ui.rememberEventFlow
 import ios.silv.gemclient.ui.theme.GemClientTheme
+import ios.silv.shared.AppComposeNavigator
+import ios.silv.shared.GeminiHome
 import ios.silv.shared.settings.AppTheme
 import ios.silv.shared.settings.SettingsStore
+import ios.silv.shared.ui.rememberEventFlow
 import kotlinx.coroutines.launch
 
 
@@ -49,7 +51,7 @@ import kotlinx.coroutines.launch
 class MainActivity(
     private val viewModelFactory: ViewModelProvider.Factory,
     private val presenterFactory: PresenterFactory,
-    private val navigator: ComposeNavigator,
+    private val navigator: AppComposeNavigator,
     private val settingsStore: SettingsStore,
 ) : ComponentActivity() {
 
@@ -61,17 +63,8 @@ class MainActivity(
         navController: NavController,
         content: @Composable () -> Unit
     ) {
-        val scope = rememberCoroutineScope()
-
-        LifecycleStartEffect(navController) {
-            val job = scope.launch {
-                with(navigator) {
-                    handleNavigationCommands(navController)
-                }
-            }
-            onStopOrDispose {
-                job.cancel()
-            }
+        LaunchedEffect(navController) {
+            navigator.handleNavigationCommands(navController)
         }
 
         CompositionLocalProvider(

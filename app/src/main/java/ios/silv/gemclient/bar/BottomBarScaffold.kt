@@ -114,12 +114,12 @@ import ios.silv.gemclient.bar.BarEvent.ReorderTabs
 import ios.silv.gemclient.bar.BarEvent.SearchChanged
 import ios.silv.gemclient.types.StablePage
 import ios.silv.gemclient.types.StableTab
-import ios.silv.gemclient.ui.EventFlow
 import ios.silv.gemclient.ui.components.TerminalSection
 import ios.silv.gemclient.ui.components.TerminalSectionButton
 import ios.silv.gemclient.ui.components.TerminalSectionDefaults
 import ios.silv.gemclient.ui.isImeVisibleAsState
 import ios.silv.gemclient.ui.nonGoogleRetardProgress
+import ios.silv.shared.ui.EventFlow
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyGridState

@@ -13,7 +13,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import ios.silv.gemclient.bar.BarMode
-import ios.silv.gemclient.GeminiTab
+import ios.silv.shared.GeminiTab
 import ios.silv.gemclient.bar.LocalBarMode
 import ios.silv.gemclient.dependency.metroViewModel
 import ios.silv.gemclient.ui.isImeVisibleAsState

@@ -2,8 +2,6 @@ package ios.silv.gemclient.dependency
 
 import androidx.lifecycle.ViewModel
 import dev.zacsweers.metro.MapKey
-import ios.silv.gemclient.ui.UiEvent
-import ios.silv.gemclient.ui.UiState
 import kotlin.reflect.KClass
 
 

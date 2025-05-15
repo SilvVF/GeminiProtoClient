@@ -1,9 +1,9 @@
 package ios.silv.gemclient.bar
 
-import ios.silv.gemclient.GeminiTab
+import ios.silv.shared.GeminiTab
 import ios.silv.gemclient.types.StablePage
 import ios.silv.gemclient.types.StableTab
-import ios.silv.gemclient.ui.UiState
+import ios.silv.shared.ui.UiState
 
 data class BarState(
     val activeTab: GeminiTab?,

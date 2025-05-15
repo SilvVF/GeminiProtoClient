@@ -1,8 +1,7 @@
 package ios.silv.gemclient.bar
 
 import ios.silv.gemclient.types.StableTab
-import ios.silv.gemclient.ui.UiEvent
-import ios.silv.sqldelight.Tab
+import ios.silv.shared.ui.UiEvent
 
 sealed interface BarEvent : UiEvent {
     data class SearchChanged(val query: String) : BarEvent

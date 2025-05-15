@@ -2,8 +2,8 @@ package ios.silv.gemclient.tab
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
-import ios.silv.gemclient.ui.UiState
 import ios.silv.libgemini.gemini.ContentNode
+import ios.silv.shared.ui.UiState
 import java.util.UUID
 
 sealed interface PageState : UiState {

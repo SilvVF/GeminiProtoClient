@@ -1,6 +1,6 @@
 package ios.silv.gemclient.home
 
-import ios.silv.gemclient.ui.UiState
+import ios.silv.shared.ui.UiState
 
 data class HomeUiState(
     val incognito: Boolean = false,

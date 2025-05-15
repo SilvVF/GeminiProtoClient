@@ -17,19 +17,19 @@ import io.github.takahirom.rin.collectAsRetainedState
 import io.github.takahirom.rin.rememberRetained
 import ios.silv.core.logcat.logcat
 import ios.silv.database.dao.TabsDao
-import ios.silv.gemclient.GeminiHome
-import ios.silv.gemclient.GeminiTab
-import ios.silv.gemclient.base.ComposeNavigator
+import ios.silv.shared.GeminiHome
+import ios.silv.shared.GeminiTab
 import ios.silv.gemclient.base.PreviewCache
-import ios.silv.gemclient.base.toRouteOrNull
-import ios.silv.gemclient.dependency.Presenter
-import ios.silv.gemclient.dependency.PresenterKey
-import ios.silv.gemclient.dependency.PresenterScope
 import ios.silv.gemclient.lib.rin.LaunchedRetainedEffect
 import ios.silv.gemclient.types.StablePage
 import ios.silv.gemclient.types.StableTab
-import ios.silv.gemclient.ui.EventEffect
-import ios.silv.gemclient.ui.EventFlow
+import ios.silv.shared.AppComposeNavigator
+import ios.silv.shared.di.Presenter
+import ios.silv.shared.di.PresenterKey
+import ios.silv.shared.di.PresenterScope
+import ios.silv.shared.toRouteOrNull
+import ios.silv.shared.ui.EventEffect
+import ios.silv.shared.ui.EventFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -40,7 +40,7 @@ import kotlinx.coroutines.flow.onEach
 @Inject
 class BarPresenter(
     private val tabsDao: TabsDao,
-    private val navigator: ComposeNavigator,
+    private val navigator: AppComposeNavigator,
     private val previewCache: PreviewCache,
     private val navController: NavController,
 ) : Presenter {

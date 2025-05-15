@@ -1,4 +1,4 @@
-package ios.silv.gemclient
+package ios.silv.shared
 
 import kotlinx.serialization.Serializable
 

@@ -1,27 +1,25 @@
-package ios.silv.gemclient.settings
+package ios.silv.shared.settings
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import io.github.takahirom.rin.collectAsRetainedState
-import ios.silv.gemclient.GeminiHome
-import ios.silv.gemclient.bar.BarPresenter
-import ios.silv.gemclient.base.ComposeNavigator
-import ios.silv.gemclient.dependency.Presenter
-import ios.silv.gemclient.dependency.PresenterKey
-import ios.silv.gemclient.dependency.PresenterScope
-import ios.silv.gemclient.ui.EventEffect
-import ios.silv.gemclient.ui.EventFlow
+import ios.silv.shared.AppComposeNavigator
+import ios.silv.shared.GeminiHome
 import ios.silv.shared.datastore.Keys
-import ios.silv.shared.settings.SettingsStore
+import ios.silv.shared.di.Presenter
+import ios.silv.shared.di.PresenterKey
+import ios.silv.shared.di.PresenterScope
+import ios.silv.shared.ui.EventEffect
+import ios.silv.shared.ui.EventFlow
 
 @ContributesIntoMap(PresenterScope::class)
 @PresenterKey(SettingsPresenter::class)
 @Inject
 class SettingsPresenter(
     private val settingsStore: SettingsStore,
-    private val navigator: ComposeNavigator,
+    private val navigator: AppComposeNavigator,
 ) : Presenter {
 
     @Composable

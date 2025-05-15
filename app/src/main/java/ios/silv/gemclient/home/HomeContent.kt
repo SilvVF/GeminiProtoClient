@@ -1,16 +1,12 @@
 package ios.silv.gemclient.home
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
@@ -36,17 +32,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
-import ios.silv.gemclient.GeminiHome
-import ios.silv.gemclient.GeminiSettings
-import ios.silv.gemclient.bar.BarEvent
+import ios.silv.shared.GeminiHome
+import ios.silv.shared.GeminiSettings
 import ios.silv.gemclient.base.LocalNavigator
 import ios.silv.gemclient.dependency.metroPresenter
 import ios.silv.gemclient.tab.DraggableNavLayout
-import ios.silv.gemclient.ui.EventFlow
 import ios.silv.gemclient.ui.components.TerminalSection
 import ios.silv.gemclient.ui.components.TerminalSectionButton
 import ios.silv.gemclient.ui.components.TerminalSectionDefaults
-import ios.silv.gemclient.ui.rememberEventFlow
+import ios.silv.shared.ui.EventFlow
+import ios.silv.shared.ui.rememberEventFlow
 
 fun NavGraphBuilder.geminiHomeDestination() {
     composable<GeminiHome> {

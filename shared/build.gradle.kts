@@ -77,6 +77,7 @@ kotlin {
                 implementation(libs.rin)
                 implementation(libs.androidx.datastore.core)
                 implementation(libs.jetbrains.compose.runtime)
+                implementation("org.jetbrains.androidx.navigation:navigation-compose:2.9.0-beta01")
             }
         }
 

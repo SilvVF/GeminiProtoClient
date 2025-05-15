@@ -1,20 +1,13 @@
 package ios.silv.gemclient.dependency
 
-import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
-import androidx.navigation.NavController
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.Provider
-import dev.zacsweers.metro.SingleIn
-import dev.zacsweers.metro.binding
 import dev.zacsweers.metro.createGraphFactory
-import ios.silv.gemclient.ui.UiEvent
-import ios.silv.gemclient.ui.UiState
 import kotlin.reflect.KClass
 
 /**

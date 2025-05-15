@@ -1,7 +1,7 @@
 package ios.silv.gemclient.tab
 
 import androidx.compose.ui.graphics.ImageBitmap
-import ios.silv.gemclient.ui.UiEvent
+import ios.silv.shared.ui.UiEvent
 
 sealed interface PageEvent : UiEvent {
     data class OnInputChanged(val input: String) : PageEvent

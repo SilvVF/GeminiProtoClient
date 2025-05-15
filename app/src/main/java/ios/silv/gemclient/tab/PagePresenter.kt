@@ -17,22 +17,22 @@ import io.github.takahirom.rin.rememberRetained
 import ios.silv.core.logcat.logcat
 import ios.silv.database.dao.TabsDao
 import ios.silv.gemclient.base.PreviewCache
-import ios.silv.gemclient.dependency.Presenter
-import ios.silv.gemclient.dependency.PresenterKey
-import ios.silv.gemclient.dependency.PresenterScope
 import ios.silv.gemclient.lib.rin.LaunchedRetainedEffect
 import ios.silv.gemclient.lib.rin.produceRetainedState
 import ios.silv.gemclient.lib.rin.rememberRetained
 import ios.silv.gemclient.tab.PageState.Content.UiNode
 import ios.silv.gemclient.types.StablePage
-import ios.silv.gemclient.ui.EventEffect
-import ios.silv.gemclient.ui.EventFlow
 import ios.silv.libgemini.gemini.GeminiClient
 import ios.silv.libgemini.gemini.GeminiCode
 import ios.silv.libgemini.gemini.GeminiParser
 import ios.silv.libgemini.gemini.Response
 import ios.silv.shared.datastore.Keys
+import ios.silv.shared.di.Presenter
+import ios.silv.shared.di.PresenterKey
+import ios.silv.shared.di.PresenterScope
 import ios.silv.shared.settings.SettingsStore
+import ios.silv.shared.ui.EventEffect
+import ios.silv.shared.ui.EventFlow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -109,8 +109,7 @@ class PagePresenter(
             }
         }
 
-        EventEffect(events)
-        { event ->
+        EventEffect(events) { event ->
             when (event) {
                 is PageEvent.OnInputChanged -> input = event.input
                 PageEvent.Refresh -> fetchId++

@@ -17,11 +17,11 @@ import ios.silv.database.AndroidSqlDriverFactory
 import ios.silv.database.DatabaseHandler
 import ios.silv.database.DatabaseHandlerImpl
 import ios.silv.database.dao.TabsDao
-import ios.silv.gemclient.base.ComposeNavigator
 import ios.silv.gemclient.base.PreviewCache
 import ios.silv.libgemini.gemini.GeminiCache
 import ios.silv.libgemini.gemini.GeminiClient
 import ios.silv.libgemini.gemini.IGeminiCache
+import ios.silv.shared.AppComposeNavigator
 import ios.silv.shared.datastore.createDataStoreAndroid
 import ios.silv.shared.settings.SettingsStore
 import kotlin.reflect.KClass
@@ -33,7 +33,7 @@ interface AppGraph {
 
     val previewCache: PreviewCache
 
-    val composeNavigator: ComposeNavigator
+    val composeNavigator: AppComposeNavigator
 
     val settingsStore: SettingsStore
 

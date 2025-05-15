@@ -1,6 +1,7 @@
 package ios.silv.gemclient.home
 
-import ios.silv.gemclient.ui.UiEvent
+import ios.silv.shared.ui.UiEvent
+
 
 sealed interface HomeEvent : UiEvent {
     data object ToggleIncognito : HomeEvent

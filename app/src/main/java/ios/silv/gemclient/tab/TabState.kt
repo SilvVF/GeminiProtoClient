@@ -1,8 +1,7 @@
 package ios.silv.gemclient.tab
 
 import ios.silv.gemclient.types.StablePage
-import ios.silv.gemclient.ui.UiState
-import ios.silv.sqldelight.Page
+import ios.silv.shared.ui.UiState
 
 sealed interface TabState: UiState {
     data object Idle : TabState

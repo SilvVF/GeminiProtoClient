@@ -9,14 +9,14 @@ import dev.zacsweers.metro.Inject
 import io.github.takahirom.rin.collectAsRetainedState
 import io.github.takahirom.rin.rememberRetained
 import ios.silv.database.dao.TabsDao
-import ios.silv.gemclient.GeminiTab
-import ios.silv.gemclient.base.ComposeNavigator
-import ios.silv.gemclient.dependency.Presenter
-import ios.silv.gemclient.dependency.PresenterKey
-import ios.silv.gemclient.dependency.PresenterScope
-import ios.silv.gemclient.ui.EventEffect
-import ios.silv.gemclient.ui.EventFlow
+import ios.silv.shared.AppComposeNavigator
+import ios.silv.shared.GeminiTab
+import ios.silv.shared.di.Presenter
+import ios.silv.shared.di.PresenterKey
+import ios.silv.shared.di.PresenterScope
 import ios.silv.shared.settings.SettingsStore
+import ios.silv.shared.ui.EventEffect
+import ios.silv.shared.ui.EventFlow
 
 
 @ContributesIntoMap(PresenterScope::class)
@@ -24,7 +24,7 @@ import ios.silv.shared.settings.SettingsStore
 @Inject
 class HomePresenter(
     private val tabsDao: TabsDao,
-    private val navigator: ComposeNavigator,
+    private val navigator: AppComposeNavigator,
     private val settingsStore: SettingsStore,
 ): Presenter {
 

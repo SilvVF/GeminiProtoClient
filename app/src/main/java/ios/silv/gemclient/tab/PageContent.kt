@@ -58,13 +58,13 @@ import ios.silv.gemclient.dependency.metroPresenter
 import ios.silv.gemclient.lib.capturable.capturable
 import ios.silv.gemclient.lib.capturable.rememberCaptureController
 import ios.silv.gemclient.lib.rin.LaunchedRetainedEffect
-import ios.silv.gemclient.ui.EventFlow
 import ios.silv.gemclient.ui.components.TerminalScrollToTop
 import ios.silv.gemclient.ui.components.TerminalSection
 import ios.silv.gemclient.ui.components.TerminalSectionDefaults
-import ios.silv.gemclient.ui.rememberEventFlow
 import ios.silv.gemclient.ui.sampleScrollingState
 import ios.silv.libgemini.gemini.ContentNode
+import ios.silv.shared.ui.EventFlow
+import ios.silv.shared.ui.rememberEventFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
