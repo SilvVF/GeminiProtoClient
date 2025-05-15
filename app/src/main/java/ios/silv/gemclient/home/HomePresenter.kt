@@ -33,7 +33,7 @@ class HomePresenter(
         var incognito by rememberRetained { mutableStateOf(false) }
 
         val recentlyViewed by settingsStore.recentlyViewed.collectAsRetainedState()
-        val bookmarked by settingsStore.recentlyViewed.collectAsRetainedState()
+        val bookmarked by settingsStore.bookmarked.collectAsRetainedState()
 
         EventEffect(eventFlow) { event ->
             when (event) {

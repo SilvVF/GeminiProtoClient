@@ -24,8 +24,11 @@ import ios.silv.gemclient.base.PreviewCache
 import ios.silv.gemclient.dependency.Presenter
 import ios.silv.gemclient.dependency.PresenterKey
 import ios.silv.gemclient.dependency.PresenterScope
+import ios.silv.gemclient.lib.rin.LaunchedRetainedEffect
 import ios.silv.gemclient.lib.rin.produceRetainedState
 import ios.silv.gemclient.lib.rin.rememberRetained
+import ios.silv.gemclient.settings.Keys
+import ios.silv.gemclient.settings.SettingsStore
 import ios.silv.gemclient.tab.PageState.Content.UiNode
 import ios.silv.gemclient.types.StablePage
 import ios.silv.gemclient.ui.EventEffect
@@ -41,8 +44,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 
@@ -52,9 +58,9 @@ import kotlinx.coroutines.launch
 class PagePresenter(
     private val client: GeminiClient,
     private val previewCache: PreviewCache,
-    private val tabsDao: TabsDao
+    private val tabsDao: TabsDao,
+    private val settingsStore: SettingsStore
 ) : Presenter {
-
 
     @Stable
     private inner class RetainedResponse(private val page: StablePage) : RetainedObserver {
@@ -101,7 +107,17 @@ class PagePresenter(
             }
         }
 
-        EventEffect(events) { event ->
+        LaunchedRetainedEffect(page) {
+            settingsStore.edit {
+                it[Keys.recentlyViewed] = buildSet {
+                    add(page.url)
+                    addAll(it[Keys.recentlyViewed].orEmpty().take(9))
+                }
+            }
+        }
+
+        EventEffect(events)
+        { event ->
             when (event) {
                 is PageEvent.OnInputChanged -> input = event.input
                 PageEvent.Refresh -> fetchId++
@@ -138,7 +154,8 @@ class PagePresenter(
                 .collect()
         }
 
-        return when (val res = response.value) {
+        return when (
+            val res = response.value) {
             null -> PageState.Loading
             else -> {
                 res.fold(

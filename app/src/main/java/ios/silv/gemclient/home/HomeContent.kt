@@ -38,6 +38,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import ios.silv.gemclient.GeminiHome
 import ios.silv.gemclient.GeminiSettings
+import ios.silv.gemclient.bar.BarEvent
 import ios.silv.gemclient.base.LocalNavigator
 import ios.silv.gemclient.dependency.metroPresenter
 import ios.silv.gemclient.tab.DraggableNavLayout
@@ -106,71 +107,28 @@ private fun GeminiHomeContent(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = TerminalSectionDefaults.horizontalPadding)
                 ) {
-                    TerminalSection(
-                        modifier = Modifier
-                            .height(IntrinsicSize.Min)
-                            .fillMaxWidth(),
-                        label = {
-                            TerminalSectionDefaults.Label(
-                                text = "bookmarked"
-                            )
-                        }
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth().padding(6.dp)
+                    TerminalItemsBlock(
+                        urls = state.bookmarked,
+                        label = "bookmarked",
+                    ) { url ->
+                        TextButton(
+                            onClick = {
+                                eventsFlow.tryEmit(HomeEvent.CreateTab(url))
+                            }
                         ) {
-                            if (state.bookmarked.isEmpty()) {
-                                Text(
-                                    "Bookmarked tabs will appear here",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier
-                                        .padding(vertical = 12.dp)
-                                        .fillMaxWidth()
-                                )
-                            }
-                            state.bookmarked.fastForEach {
-                                TextButton(
-                                    onClick = {}
-                                ) {
-                                    Text(it)
-                                }
-                            }
+                            Text(url)
                         }
                     }
-                    TerminalSection(
-                        modifier = Modifier
-                            .height(IntrinsicSize.Min)
-                            .fillMaxWidth(),
-                        label = {
-                            TerminalSectionDefaults.Label(
-                                text = "recently viewed"
-                            )
-                        }
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(6.dp)
+                    TerminalItemsBlock(
+                        urls = state.recentlyViewed,
+                        label = "recently viewed",
+                    ) { url ->
+                        TextButton(
+                            onClick = {
+                                eventsFlow.tryEmit(HomeEvent.CreateTab(url))
+                            }
                         ) {
-                            if (state.recentlyViewed.isEmpty()) {
-                                Text(
-                                    "Recently viewed links will appear here",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier
-                                        .padding(vertical = 12.dp)
-                                        .fillMaxWidth()
-                                )
-                            }
-                            state.recentlyViewed.fastForEach {
-                                TextButton(
-                                    onClick = {}
-                                ) {
-                                    Text(it)
-                                }
-                            }
+                            Text(url)
                         }
                     }
                 }
@@ -179,6 +137,43 @@ private fun GeminiHomeContent(
     }
 }
 
+
+@Composable
+private fun TerminalItemsBlock(
+    urls: List<String>,
+    label: String,
+    item: @Composable (url: String) -> Unit,
+) {
+    TerminalSection(
+        modifier = Modifier
+            .height(IntrinsicSize.Min)
+            .fillMaxWidth(),
+        label = {
+            TerminalSectionDefaults.Label(
+                text = label
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth().padding(6.dp)
+        ) {
+            if (urls.isEmpty()) {
+                Text(
+                    "$label pages will appear here",
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .padding(vertical = 12.dp)
+                        .fillMaxWidth()
+                )
+            }
+            urls.fastForEach {
+               item(it)
+            }
+        }
+    }
+}
 
 @Composable
 private fun HomeTopAppBar(
