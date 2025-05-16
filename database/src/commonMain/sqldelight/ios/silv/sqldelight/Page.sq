@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS Page (
     FOREIGN KEY(tab_id) REFERENCES Tab(tid) ON DELETE CASCADE
 );
 
+selectPageUrls:
+SELECT url FROM Page;
+
 insertPage:
 INSERT INTO Page(pid, tab_id, url, prev_page)
 VALUES (NULL, :tabId, :url, :prevPage);

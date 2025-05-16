@@ -88,11 +88,10 @@ class PagePresenter @Inject constructor(
                 is PageEvent.Submit -> {
                     tabsDao.insertPage(tab.id, event.url + "?query=${input}")
                 }
-
                 is PageEvent.PreviewSaved -> {
                     logcat { "writing preview to cache ${event.page.tabId}" }
                     previewCache.write(
-                        tabId = event.page.tabId,
+                        url = event.page.url,
                         bitmap = event.bitmap
                     ).onSuccess {
                         tabsDao.updatePreviewImageUpdatedAt(event.page.tabId)
@@ -113,6 +112,12 @@ class PagePresenter @Inject constructor(
                 }
 
                 is PageEvent.LoadPage -> tabsDao.insertPage(tab.id, event.link)
+                is PageEvent.CreateTab -> {
+                    val newTab = tabsDao.insertTab(event.link)
+                    navigator.navCmds.tryEmit {
+                        navigate(GeminiTab(id = newTab.tid))
+                    }
+                }
             }
         }
 

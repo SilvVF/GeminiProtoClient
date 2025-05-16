@@ -3,14 +3,18 @@
 package ios.silv.gemclient.tab
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
@@ -30,13 +34,16 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -53,6 +60,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
@@ -102,7 +112,9 @@ fun PageContent(
         }
 
         is PageState.Ready.Input -> {
-            PageInputContent(pageState, events)
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                PageInputContent(pageState, events)
+            }
         }
 
         is PageState.Ready -> {
@@ -354,16 +366,6 @@ private fun StdOutBlock(
     val controller by rememberUpdatedState(captureController)
     val events by rememberUpdatedState(pageEvents)
 
-    LaunchedImpressionEffect(pageState.page.url, pageState.nodesOrNull) {
-        if (pageState.nodesOrNull != null) {
-            val bitmapAsync = controller.captureAsync()
-            suspendRunCatching {
-                val bitmap = bitmapAsync.await()
-                events.tryEmit(PageEvent.PreviewSaved(pageState.page, bitmap))
-            }
-        }
-    }
-
     TerminalSection(
         modifier = Modifier.padding(horizontal = TerminalSectionDefaults.horizontalPadding),
         label = {
@@ -395,11 +397,7 @@ private fun StdOutBlock(
                         }
                     } else {
                         item(key = key, contentType = contentType) {
-                            node.Render(
-                                loadPage = {
-                                    pageEvents.tryEmit(PageEvent.LoadPage(it))
-                                }
-                            )
+                            node.Render(events = events)
                         }
                     }
                 }
@@ -417,22 +415,36 @@ private fun StdOutBlock(
                 }
             )
         }
+        // This must be placed at the bottom so the content above is rendered first
+        // in order to capture the image
+        LaunchedImpressionEffect(pageState.page, pageState.nodesOrNull) {
+            if (pageState.nodesOrNull.isNullOrEmpty().not()) {
+                val bitmapAsync = controller.captureAsync()
+                suspendRunCatching {
+                    val bitmap = bitmapAsync.await()
+                    events.tryEmit(PageEvent.PreviewSaved(pageState.page, bitmap))
+                }
+            }
+        }
     }
 }
 
 
 @Composable
 private fun ContentNode.Render(
+    events: EventFlow<PageEvent>,
     modifier: Modifier = Modifier,
-    loadPage: (url: String) -> Unit
 ) {
     Box(modifier) {
         when (val node = this@Render) {
             is ContentNode.Error -> node.RenderError()
             is ContentNode.Line.Heading -> node.RenderHeading()
             is ContentNode.Line.Link -> node.RenderLink(
+                onLongClick = {
+                    events.tryEmit(PageEvent.CreateTab(node.url))
+                },
                 onClick = {
-                    loadPage(node.url)
+                    events.tryEmit(PageEvent.LoadPage(node.url))
                 }
             )
 
@@ -471,12 +483,22 @@ private fun ContentNode.Line.Heading.RenderHeading() {
 @Composable
 private fun ContentNode.Line.Link.RenderLink(
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    TextButton(
-        modifier = modifier,
-        onClick = onClick
-    ) {
-        Text(name)
+    Box(
+        modifier = modifier.combinedClickable(
+            onLongClick = onLongClick,
+            onClick = onClick
+        )
+            .minimumInteractiveComponentSize()
+            .fillMaxWidth()
+            .padding(ButtonDefaults.ContentPadding),
+    )  {
+        Text(
+            this@RenderLink.name,
+            color = ButtonDefaults.textButtonColors().contentColor,
+            style = MaterialTheme.typography.labelLarge
+        )
     }
 }

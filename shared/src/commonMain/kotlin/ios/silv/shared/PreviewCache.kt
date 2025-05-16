@@ -6,7 +6,7 @@ import okio.Path
 
 interface PreviewCache {
     val invalidated: Flow<Unit>
-    suspend fun write(tabId: Long, bitmap: ImageBitmap): Result<Path>
-    suspend fun read(tabId: Long): Path?
-    suspend fun clean(tabIds: List<Long>): Boolean
+    suspend fun write(url: String, bitmap: ImageBitmap): Result<Path>
+    suspend fun read(url: String): Path?
+    suspend fun clean(urls: List<String>): Boolean
 }

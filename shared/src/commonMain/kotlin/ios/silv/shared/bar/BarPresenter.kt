@@ -13,6 +13,7 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.currentBackStackEntryAsState
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
+import ios.silv.core.let
 import ios.silv.core.logcat.logcat
 import ios.silv.database.dao.TabsDao
 import ios.silv.shared.AppComposeNavigator
@@ -100,7 +101,7 @@ class BarPresenter(
                     Triple(
                         StableTab(tab),
                         StablePage(page),
-                        previewCache.read(tab.tid)?.toString()
+                        page?.url?.let(previewCache::read)?.toString()
                     )
                 }
             )

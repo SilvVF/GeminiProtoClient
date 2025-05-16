@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
 import okio.Path
 import okio.Path.Companion.toOkioPath
 import java.io.File
+import java.security.MessageDigest
 
 @ContributesBinding(AppScope::class)
 @SingleIn(AppScope::class)
@@ -34,18 +35,27 @@ class AndroidPreviewCache @Inject constructor(
         .conflate()
         .onStart { emit(Unit) }
 
-    override suspend fun clean(tabIds: List<Long>): Boolean = withContext(Dispatchers.IO) {
+    private val md5 by lazy {
+        MessageDigest.getInstance("md5")
+    }
+
+    override suspend fun clean(urls: List<String>): Boolean = withContext(Dispatchers.IO) {
         suspendRunCatching {
             val files = cacheDir.listFiles()
                 ?.filterNotNull()
                 ?.filter { it.isFile }
                 .orEmpty()
 
+            val hashed = buildSet {
+                for (url in urls) {
+                    add(fileKey(url))
+                }
+            }
+
             for (f in files) {
                 try {
-                    val split = f.nameWithoutExtension.split("_")
-                    val tabId = split.lastOrNull()?.toLongOrNull() ?: continue
-                    if (tabId !in tabIds) {
+                    val name = f.nameWithoutExtension
+                    if (name !in hashed) {
                         f.delete()
                     }
                 } catch (e: Exception) {
@@ -57,13 +67,14 @@ class AndroidPreviewCache @Inject constructor(
             .isSuccess
     }
 
-    private fun fileKey(tabId: Long) = "tab_$tabId.png"
+    @OptIn(ExperimentalStdlibApi::class)
+    private fun fileKey(url: String) = md5.digest(url.toByteArray()).toHexString()
 
-    override suspend fun write(tabId: Long, bitmap: ImageBitmap): Result<Path> =
+    override suspend fun write(url: String, bitmap: ImageBitmap): Result<Path> =
         withContext(Dispatchers.IO) {
             suspendRunCatching {
                 cacheDir.mkdirs()
-                File(cacheDir, fileKey(tabId)).also { f ->
+                File(cacheDir, fileKey(url) + ".png").also { f ->
                     f.outputStream().use { os ->
                         bitmap.asAndroidBitmap()
                             .compress(Bitmap.CompressFormat.PNG, 100, os)
@@ -72,12 +83,12 @@ class AndroidPreviewCache @Inject constructor(
                     .toOkioPath()
             }
                 .onSuccess {
-                    logcat { "Successfully wrote to cache tab_id=${tabId}" }
+                    logcat { "Successfully wrote to cache url=${url}" }
                     _invalidated.tryEmit(Unit)
                 }
         }
 
-    override suspend fun read(tabId: Long): Path? {
-        return File(cacheDir, fileKey(tabId)).takeIf { it.exists() }?.toOkioPath()
+    override suspend fun read(url: String): Path? {
+        return File(cacheDir, fileKey(url) + ".png").takeIf { it.exists() }?.toOkioPath()
     }
 }

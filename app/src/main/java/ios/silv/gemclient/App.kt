@@ -39,7 +39,7 @@ class App : Application(), SingletonImageLoader.Factory {
 
         CoroutineScope(Dispatchers.IO).launch {
             suspendRunCatching {
-                previewCache.clean(tabsDao.selectTabIds())
+                previewCache.clean(tabsDao.selectPageUrls())
             }
         }
     }

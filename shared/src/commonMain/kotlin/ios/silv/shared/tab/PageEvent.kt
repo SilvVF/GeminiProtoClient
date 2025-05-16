@@ -10,5 +10,6 @@ sealed interface PageEvent : UiEvent {
     data object Refresh: PageEvent
     data class PreviewSaved(val page: StablePage, val bitmap: ImageBitmap): PageEvent
     data class LoadPage(val link: String): PageEvent
+    data class CreateTab(val link: String): PageEvent
     data object GoBack : PageEvent
 }
