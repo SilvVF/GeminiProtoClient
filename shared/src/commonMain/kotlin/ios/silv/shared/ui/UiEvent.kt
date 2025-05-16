@@ -1,10 +1,12 @@
 package ios.silv.shared.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
+import ios.silv.core.suspendRunCatching
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
@@ -45,26 +47,26 @@ interface UiEvent
 interface UiState
 
 @Stable
-class EventFlow<T: UiEvent>(
+class EventFlow<T : UiEvent>(
     replay: Int = 0,
     extraBufferCapacity: Int = 0,
     onBufferOverflow: BufferOverflow = BufferOverflow.SUSPEND
-): MutableSharedFlow<T> by MutableSharedFlow(replay, extraBufferCapacity, onBufferOverflow)
+) : MutableSharedFlow<T> by MutableSharedFlow(replay, extraBufferCapacity, onBufferOverflow)
 
 @Composable
-fun <T: UiEvent> rememberEventFlow(): EventFlow<T> {
+fun <T : UiEvent> rememberEventFlow(): EventFlow<T> {
     return remember {
         EventFlow(extraBufferCapacity = 20)
     }
 }
 
 @Composable
-fun <EVENT: UiEvent> EventEffect(
+fun <EVENT : UiEvent> EventEffect(
     eventFlow: EventFlow<EVENT>,
     block: suspend CoroutineScope.(EVENT) -> Unit,
 ) {
-    LaunchedEffect(eventFlow) {
-        try {
+    LaunchedImpressionEffect(eventFlow) {
+        suspendRunCatching {
             supervisorScope {
                 eventFlow.collect { event ->
                     launch {
@@ -72,8 +74,6 @@ fun <EVENT: UiEvent> EventEffect(
                     }
                 }
             }
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
         }
     }
 }

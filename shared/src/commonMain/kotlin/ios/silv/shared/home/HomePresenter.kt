@@ -6,8 +6,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
-import io.github.takahirom.rin.collectAsRetainedState
-import io.github.takahirom.rin.rememberRetained
 import ios.silv.database.dao.TabsDao
 import ios.silv.shared.AppComposeNavigator
 import ios.silv.shared.GeminiTab
@@ -17,6 +15,8 @@ import ios.silv.shared.di.PresenterScope
 import ios.silv.shared.settings.SettingsStore
 import ios.silv.shared.ui.EventEffect
 import ios.silv.shared.ui.EventFlow
+import ios.silv.shared.ui.collectAsRetainedState
+import ios.silv.shared.ui.rememberRetained
 
 
 @ContributesIntoMap(PresenterScope::class)

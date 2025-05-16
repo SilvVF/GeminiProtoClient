@@ -1,31 +1,32 @@
 package ios.silv.gemclient.tab
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.produceState
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
+import androidx.navigation.toRoute
+import ios.silv.gemclient.App
 import ios.silv.gemclient.bar.BarMode
-import ios.silv.shared.GeminiTab
 import ios.silv.gemclient.bar.LocalBarMode
-import ios.silv.gemclient.dependency.metroViewModel
+import ios.silv.gemclient.dependency.metroPresenter
 import ios.silv.gemclient.ui.isImeVisibleAsState
-import ios.silv.shared.tab.TabEvent
-import ios.silv.shared.tab.TabState
-import ios.silv.shared.tab.TabViewModel
+import ios.silv.shared.GeminiTab
+import ios.silv.shared.tab.PageEvent
+import ios.silv.shared.tab.PagePresenter
+import ios.silv.shared.ui.rememberEventFlow
+import kotlinx.coroutines.delay
 
 fun NavGraphBuilder.geminiTabDestination() {
     composable<GeminiTab> {
-        val viewModel: TabViewModel = metroViewModel()
 
-        val state by viewModel.state.collectAsStateWithLifecycle()
+
+        val events = rememberEventFlow<PageEvent>()
+        val presenter = metroPresenter<PagePresenter>()
+
+        val state = presenter.present(it.toRoute(), events)
+
         val barMode = LocalBarMode.current
         val ime by isImeVisibleAsState()
 
@@ -35,39 +36,13 @@ fun NavGraphBuilder.geminiTabDestination() {
             if (barMode.currentState != BarMode.NONE) {
                 barMode.targetState = BarMode.NONE
             } else {
-                viewModel.goBack()
+                events.tryEmit(PageEvent.GoBack)
             }
         }
 
-        TabContent(
-            state = state,
-            events = viewModel::onEvent
+        PageContent(
+            pageState = state,
+            events = events
         )
-    }
-}
-
-@Composable
-private fun TabContent(
-    state: TabState,
-    events: (TabEvent) -> Unit
-) {
-    when (state) {
-        is TabState.Idle -> {
-            Box(Modifier.fillMaxSize()) {
-                CircularProgressIndicator(Modifier.align(Alignment.Center))
-            }
-        }
-
-        is TabState.Loaded -> {
-
-            PageContent(state.page, events)
-        }
-
-        TabState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("error")
-        }
-        TabState.NoPages ->  Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No Pages for tab")
-        }
     }
 }

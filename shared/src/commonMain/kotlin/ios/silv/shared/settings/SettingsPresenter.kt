@@ -4,7 +4,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
-import io.github.takahirom.rin.collectAsRetainedState
 import ios.silv.shared.AppComposeNavigator
 import ios.silv.shared.GeminiHome
 import ios.silv.shared.datastore.Keys
@@ -13,6 +12,7 @@ import ios.silv.shared.di.PresenterKey
 import ios.silv.shared.di.PresenterScope
 import ios.silv.shared.ui.EventEffect
 import ios.silv.shared.ui.EventFlow
+import ios.silv.shared.ui.collectAsRetainedState
 
 @ContributesIntoMap(PresenterScope::class)
 @PresenterKey(SettingsPresenter::class)

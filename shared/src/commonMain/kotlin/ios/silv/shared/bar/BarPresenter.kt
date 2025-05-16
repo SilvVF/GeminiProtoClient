@@ -13,8 +13,6 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.currentBackStackEntryAsState
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
-import io.github.takahirom.rin.collectAsRetainedState
-import io.github.takahirom.rin.rememberRetained
 import ios.silv.core.logcat.logcat
 import ios.silv.database.dao.TabsDao
 import ios.silv.shared.AppComposeNavigator
@@ -29,6 +27,8 @@ import ios.silv.shared.types.StablePage
 import ios.silv.shared.types.StableTab
 import ios.silv.shared.ui.EventEffect
 import ios.silv.shared.ui.EventFlow
+import ios.silv.shared.ui.collectAsRetainedState
+import ios.silv.shared.ui.rememberRetained
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest

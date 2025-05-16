@@ -37,13 +37,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
@@ -57,7 +57,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import ios.silv.gemclient.dependency.metroPresenter
+import ios.silv.core.suspendRunCatching
 import ios.silv.gemclient.lib.capturable.capturable
 import ios.silv.gemclient.lib.capturable.rememberCaptureController
 import ios.silv.gemclient.ui.components.TerminalScrollToTop
@@ -66,12 +66,12 @@ import ios.silv.gemclient.ui.components.TerminalSectionDefaults
 import ios.silv.gemclient.ui.sampleScrollingState
 import ios.silv.libgemini.gemini.ContentNode
 import ios.silv.shared.tab.PageEvent
-import ios.silv.shared.tab.PagePresenter
 import ios.silv.shared.tab.PageState
-import ios.silv.shared.tab.TabEvent
 import ios.silv.shared.types.StablePage
 import ios.silv.shared.ui.EventFlow
-import ios.silv.shared.ui.rememberEventFlow
+import ios.silv.shared.ui.LaunchedImpressionEffect
+import ios.silv.shared.ui.rememberRetained
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
@@ -79,31 +79,52 @@ import kotlin.math.roundToInt
 
 @Composable
 fun PageContent(
-    page: StablePage,
-    tabEvents: (TabEvent) -> Unit,
+    pageState: PageState,
+    events: EventFlow<PageEvent>,
 ) {
-    val presenter = metroPresenter<PagePresenter>()
+    when (pageState) {
+        PageState.Blank -> {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No Pages for tab")
+            }
+        }
 
-    val events = rememberEventFlow<PageEvent>()
-    val pageState = presenter.present(page, events)
+        is PageState.Error -> {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("error loading page ${pageState.message}")
+            }
+        }
 
-    PullToRefreshBox(
-        isRefreshing = pageState is PageState.Loading,
-        onRefresh = {
-            events.tryEmit(PageEvent.Refresh)
-        },
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top)),
-    ) {
-        PageLoadedContent(tabEvents, pageState, events)
+        PageState.Loading -> {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        }
+
+        is PageState.Ready.Input -> {
+            PageInputContent(pageState, events)
+        }
+
+        is PageState.Ready -> {
+            PullToRefreshBox(
+                isRefreshing = pageState is PageState.Ready.Loading,
+                onRefresh = {
+                    events.tryEmit(PageEvent.Refresh)
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top)),
+            ) {
+                PageReadyContent(pageState, events)
+            }
+        }
     }
 }
 
 
 @Composable
 private fun PageInputContent(
-    state: PageState.Input,
+    state: PageState.Ready.Input,
     events: EventFlow<PageEvent>
 ) {
     Column(Modifier.fillMaxSize()) {
@@ -113,7 +134,7 @@ private fun PageInputContent(
             trailingIcon = {
                 IconButton(
                     onClick = {
-                        events.tryEmit(PageEvent.Submit)
+                        events.tryEmit(PageEvent.Submit(""))
                     }
                 ) {
                     Icon(
@@ -212,25 +233,35 @@ fun DraggableNavLayout(
 }
 
 @Composable
-private fun PageLoadedContent(
-    events: (TabEvent) -> Unit,
-    pageState: PageState,
+private fun PageReadyContent(
+    pageState: PageState.Ready,
     pageEvents: EventFlow<PageEvent>
 ) {
     val listState = rememberLazyListState()
+    val savedScrollPositions = rememberRetained { mutableMapOf<StablePage, Int>() }
+
+    LaunchedImpressionEffect(pageState.page) {
+        val lastScrollIdx = savedScrollPositions[pageState.page] ?: 0
+        launch {
+            listState.scrollToItem(lastScrollIdx)
+        }
+
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .collectLatest {
+                savedScrollPositions[pageState.page] = it
+            }
+    }
 
     DraggableNavLayout(
         navBlock = {
             NavBlock(
                 listState = listState,
-                events = events,
                 pageState = pageState,
                 pageEvents = pageEvents
             )
         },
         stdOutBlock = {
             StdOutBlock(
-                events,
                 pageState,
                 pageEvents,
                 listState
@@ -241,8 +272,7 @@ private fun PageLoadedContent(
 
 @Composable
 private fun NavBlock(
-    events: (TabEvent) -> Unit,
-    pageState: PageState,
+    pageState: PageState.Ready,
     pageEvents: EventFlow<PageEvent>,
     listState: LazyListState,
 ) {
@@ -314,24 +344,25 @@ private fun NavBlock(
 
 @Composable
 private fun StdOutBlock(
-    events: (TabEvent) -> Unit,
-    pageState: PageState,
+    pageState: PageState.Ready,
     pageEvents: EventFlow<PageEvent>,
     listState: LazyListState,
 ) {
     val captureController = rememberCaptureController()
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(pageState.nodesOrNull) {
+    val controller by rememberUpdatedState(captureController)
+    val events by rememberUpdatedState(pageEvents)
+
+    LaunchedImpressionEffect(pageState.page.url, pageState.nodesOrNull) {
         if (pageState.nodesOrNull != null) {
-            val bitmapAsync = captureController.captureAsync()
-            runCatching {
+            val bitmapAsync = controller.captureAsync()
+            suspendRunCatching {
                 val bitmap = bitmapAsync.await()
-                pageEvents.tryEmit(PageEvent.PreviewSaved(bitmap))
+                events.tryEmit(PageEvent.PreviewSaved(pageState.page, bitmap))
             }
         }
     }
-
 
     TerminalSection(
         modifier = Modifier.padding(horizontal = TerminalSectionDefaults.horizontalPadding),
@@ -339,65 +370,52 @@ private fun StdOutBlock(
             TerminalSectionDefaults.Label("std-out")
         }
     ) {
-        when (pageState) {
-            is PageState.Content -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 2.dp)
-                        .capturable(captureController)
-                ) {
-                    val scrollToTopVisible by listState.sampleScrollingState()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 2.dp)
+                .capturable(captureController)
+        ) {
+            val scrollToTopVisible by listState.sampleScrollingState()
 
-                    LazyColumn(
-                        state = listState
-                    ) {
-                        for ((node, key, contentType) in pageState.nodes) {
-                            if (node is ContentNode.Line.Heading) {
-                                stickyHeader(key = key, contentType = contentType) {
-                                    Surface(
-                                        Modifier.fillMaxWidth(),
-                                        color = MaterialTheme.colorScheme.surface.copy(
-                                            alpha = 0.78f
-                                        )
-                                    ) {
-                                        node.RenderHeading()
-                                    }
-                                }
-                            } else {
-                                item(key = key, contentType = contentType) {
-                                    node.Render(
-                                        loadPage = {
-                                            events(TabEvent.LoadPage(it))
-                                        }
-                                    )
-                                }
+            LazyColumn(
+                state = listState
+            ) {
+                for ((node, key, contentType) in pageState.nodesOrNull.orEmpty()) {
+                    if (node is ContentNode.Line.Heading) {
+                        stickyHeader(key = key, contentType = contentType) {
+                            Surface(
+                                Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.surface.copy(
+                                    alpha = 0.78f
+                                )
+                            ) {
+                                node.RenderHeading()
                             }
+                        }
+                    } else {
+                        item(key = key, contentType = contentType) {
+                            node.Render(
+                                loadPage = {
+                                    pageEvents.tryEmit(PageEvent.LoadPage(it))
+                                }
+                            )
                         }
                     }
-
-                    TerminalScrollToTop(
-                        visible = scrollToTopVisible,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .offset { IntOffset(0, -12) },
-                        onClick = {
-                            scope.launch {
-                                listState.animateScrollToItem(0)
-                            }
-                        }
-                    )
                 }
             }
 
-            is PageState.Error -> Box(Modifier.fillMaxSize()) {
-                Text(pageState.message)
-            }
-
-            is PageState.Input -> PageInputContent(pageState, pageEvents)
-            PageState.Loading -> Box(Modifier.fillMaxSize()) {
-                CircularProgressIndicator(Modifier.align(Alignment.Center))
-            }
+            TerminalScrollToTop(
+                visible = scrollToTopVisible,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .offset { IntOffset(0, -12) },
+                onClick = {
+                    scope.launch {
+                        listState.animateScrollToItem(0)
+                    }
+                }
+            )
         }
     }
 }

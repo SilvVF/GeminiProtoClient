@@ -23,6 +23,7 @@ import ios.silv.libgemini.gemini.IGeminiCache
 import ios.silv.shared.AppComposeNavigator
 import ios.silv.shared.datastore.createDataStoreAndroid
 import ios.silv.shared.settings.SettingsStore
+import ios.silv.sqldelight.Tab
 import kotlin.reflect.KClass
 
 @DependencyGraph(AppScope::class, isExtendable = true)
@@ -35,6 +36,8 @@ interface AppGraph {
     val composeNavigator: AppComposeNavigator
 
     val settingsStore: SettingsStore
+
+    val tabsDao: TabsDao
 
     @Provides
     @SingleIn(AppScope::class)
