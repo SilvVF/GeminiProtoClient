@@ -1,4 +1,4 @@
-package ios.silv.gemclient.home
+package ios.silv.shared.home
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue

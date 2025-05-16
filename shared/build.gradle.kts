@@ -74,10 +74,11 @@ kotlin {
                 // Add KMP dependencies here
                 implementation(libs.kotlin.coroutines.core)
 
-                implementation(libs.rin)
                 implementation(libs.androidx.datastore.core)
                 implementation(libs.jetbrains.compose.runtime)
+                implementation(libs.rin)
                 implementation("org.jetbrains.androidx.navigation:navigation-compose:2.9.0-beta01")
+                implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0-beta01")
             }
         }
 

@@ -17,6 +17,9 @@ import ios.silv.shared.GeminiTab
 import ios.silv.gemclient.bar.LocalBarMode
 import ios.silv.gemclient.dependency.metroViewModel
 import ios.silv.gemclient.ui.isImeVisibleAsState
+import ios.silv.shared.tab.TabEvent
+import ios.silv.shared.tab.TabState
+import ios.silv.shared.tab.TabViewModel
 
 fun NavGraphBuilder.geminiTabDestination() {
     composable<GeminiTab> {
@@ -55,7 +58,10 @@ private fun TabContent(
             }
         }
 
-        is TabState.Loaded -> PageContent(state, events)
+        is TabState.Loaded -> {
+
+            PageContent(state.page, events)
+        }
 
         TabState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("error")

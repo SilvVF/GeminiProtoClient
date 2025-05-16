@@ -1,4 +1,4 @@
-package ios.silv.gemclient.types
+package ios.silv.shared.types
 
 import ios.silv.sqldelight.Page
 

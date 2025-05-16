@@ -43,28 +43,9 @@ object GeminiParser {
 // #...[<whitespace>]<heading>
 private val headingRegex = Regex("#+\\s+.*")
 
-fun resolveUrl(baseUrl: String, relativeOrAbsolute: String): String {
-    val base = Url(baseUrl)
-    val candidate = relativeOrAbsolute.trim()
+expect fun resolveUrl(baseUrl: String, url: String): String
 
-    return if (candidate.startsWith("http://") || candidate.startsWith("https://")) {
-        candidate
-    } else {
-        URLBuilder().apply {
-            takeFrom(base)
-            encodedPath = base.encodedPath.trimEnd('/') + "/" + candidate.trimStart('/')
-        }.build().toString()
-    }
-}
-
-fun isRelativeUrl(url: String): Boolean {
-    return try {
-        val parsed = Url(url.trim())
-        parsed.protocol.name.isEmpty() || parsed.protocol.name == "<unknown>"
-    } catch (e: Exception) {
-        true
-    }
-}
+expect fun isRelativeUrl(url: String): Boolean
 
 private const val LINK_PREFIX = "=>"
 private const val LIST_PREFIX = "* "

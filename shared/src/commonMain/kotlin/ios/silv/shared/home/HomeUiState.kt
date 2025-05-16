@@ -1,4 +1,4 @@
-package ios.silv.gemclient.home
+package ios.silv.shared.home
 
 import ios.silv.shared.ui.UiState
 

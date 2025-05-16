@@ -1,4 +1,4 @@
-package ios.silv.gemclient.dependency
+package ios.silv.shared.di
 
 import androidx.lifecycle.ViewModel
 import dev.zacsweers.metro.MapKey

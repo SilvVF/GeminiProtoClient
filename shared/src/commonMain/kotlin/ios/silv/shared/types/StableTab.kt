@@ -1,4 +1,4 @@
-package ios.silv.gemclient.types
+package ios.silv.shared.types
 
 import androidx.compose.runtime.Stable
 import ios.silv.sqldelight.Tab

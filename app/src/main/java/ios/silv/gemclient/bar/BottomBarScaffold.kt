@@ -14,7 +14,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -27,7 +26,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -68,6 +66,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -102,23 +102,24 @@ import androidx.core.view.HapticFeedbackConstantsCompat
 import androidx.core.view.ViewCompat
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import io.github.takahirom.rin.rememberRetained
 import ios.silv.core.logcat.logcat
 import ios.silv.gemclient.R
-import ios.silv.gemclient.bar.BarEvent.CreateBlankTab
-import ios.silv.gemclient.bar.BarEvent.CreateNewPage
-import ios.silv.gemclient.bar.BarEvent.CreateNewTab
-import ios.silv.gemclient.bar.BarEvent.DeleteTab
-import ios.silv.gemclient.bar.BarEvent.GoToTab
-import ios.silv.gemclient.bar.BarEvent.ReorderTabs
-import ios.silv.gemclient.bar.BarEvent.SearchChanged
-import ios.silv.gemclient.types.StablePage
-import ios.silv.gemclient.types.StableTab
+import ios.silv.shared.bar.BarEvent.CreateBlankTab
+import ios.silv.shared.bar.BarEvent.CreateNewPage
+import ios.silv.shared.bar.BarEvent.CreateNewTab
+import ios.silv.shared.bar.BarEvent.DeleteTab
+import ios.silv.shared.bar.BarEvent.GoToTab
+import ios.silv.shared.bar.BarEvent.ReorderTabs
+import ios.silv.shared.bar.BarEvent.SearchChanged
+import ios.silv.shared.types.StablePage
+import ios.silv.shared.types.StableTab
 import ios.silv.gemclient.ui.components.TerminalSection
 import ios.silv.gemclient.ui.components.TerminalSectionButton
 import ios.silv.gemclient.ui.components.TerminalSectionDefaults
 import ios.silv.gemclient.ui.isImeVisibleAsState
 import ios.silv.gemclient.ui.nonGoogleRetardProgress
+import ios.silv.shared.bar.BarEvent
+import ios.silv.shared.bar.BarState
 import ios.silv.shared.ui.EventFlow
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyGridState
@@ -140,7 +141,12 @@ fun BottombarScaffold(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    val barMode = rememberRetained { MutableTransitionState(BarMode.NONE) }
+    val barMode = rememberSaveable(
+        saver = Saver(
+            save = { it.currentState.ordinal },
+            restore = { MutableTransitionState(BarMode.entries[it]) }
+        )
+    ) { MutableTransitionState(BarMode.NONE) }
 
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current

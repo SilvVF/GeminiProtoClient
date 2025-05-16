@@ -1,6 +1,6 @@
-package ios.silv.gemclient.tab
+package ios.silv.shared.tab
 
-import ios.silv.gemclient.types.StablePage
+import ios.silv.shared.types.StablePage
 import ios.silv.shared.ui.UiState
 
 sealed interface TabState: UiState {

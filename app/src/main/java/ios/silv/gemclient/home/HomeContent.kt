@@ -40,6 +40,9 @@ import ios.silv.gemclient.tab.DraggableNavLayout
 import ios.silv.gemclient.ui.components.TerminalSection
 import ios.silv.gemclient.ui.components.TerminalSectionButton
 import ios.silv.gemclient.ui.components.TerminalSectionDefaults
+import ios.silv.shared.home.HomeEvent
+import ios.silv.shared.home.HomePresenter
+import ios.silv.shared.home.HomeUiState
 import ios.silv.shared.ui.EventFlow
 import ios.silv.shared.ui.rememberEventFlow
 

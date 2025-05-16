@@ -10,12 +10,14 @@ import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -35,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -57,12 +60,16 @@ import androidx.compose.ui.unit.dp
 import ios.silv.gemclient.dependency.metroPresenter
 import ios.silv.gemclient.lib.capturable.capturable
 import ios.silv.gemclient.lib.capturable.rememberCaptureController
-import ios.silv.gemclient.lib.rin.LaunchedRetainedEffect
 import ios.silv.gemclient.ui.components.TerminalScrollToTop
 import ios.silv.gemclient.ui.components.TerminalSection
 import ios.silv.gemclient.ui.components.TerminalSectionDefaults
 import ios.silv.gemclient.ui.sampleScrollingState
 import ios.silv.libgemini.gemini.ContentNode
+import ios.silv.shared.tab.PageEvent
+import ios.silv.shared.tab.PagePresenter
+import ios.silv.shared.tab.PageState
+import ios.silv.shared.tab.TabEvent
+import ios.silv.shared.types.StablePage
 import ios.silv.shared.ui.EventFlow
 import ios.silv.shared.ui.rememberEventFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -71,11 +78,14 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @Composable
-fun PageContent(state: TabState.Loaded, tabEvents: (TabEvent) -> Unit) {
+fun PageContent(
+    page: StablePage,
+    tabEvents: (TabEvent) -> Unit,
+) {
     val presenter = metroPresenter<PagePresenter>()
 
     val events = rememberEventFlow<PageEvent>()
-    val pageState = presenter.present(state.page, events)
+    val pageState = presenter.present(page, events)
 
     PullToRefreshBox(
         isRefreshing = pageState is PageState.Loading,
@@ -84,7 +94,7 @@ fun PageContent(state: TabState.Loaded, tabEvents: (TabEvent) -> Unit) {
         },
         modifier = Modifier
             .fillMaxSize()
-            .padding(top = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()),
+            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top)),
     ) {
         PageLoadedContent(tabEvents, pageState, events)
     }
@@ -264,7 +274,9 @@ private fun NavBlock(
                 }
         }
 
-        LazyColumn {
+        LazyColumn(
+            Modifier.fillMaxSize()
+        ) {
             items(
                 items = headings
             ) { node ->
@@ -310,7 +322,7 @@ private fun StdOutBlock(
     val captureController = rememberCaptureController()
     val scope = rememberCoroutineScope()
 
-    LaunchedRetainedEffect(pageState.nodesOrNull) {
+    LaunchedEffect(pageState.nodesOrNull) {
         if (pageState.nodesOrNull != null) {
             val bitmapAsync = captureController.captureAsync()
             runCatching {

@@ -2,7 +2,6 @@ package ios.silv.gemclient.dependency
 
 import android.app.Activity
 import android.content.Context
-import android.provider.ContactsContract.Data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import app.cash.sqldelight.db.SqlDriver
@@ -17,7 +16,7 @@ import ios.silv.database.AndroidSqlDriverFactory
 import ios.silv.database.DatabaseHandler
 import ios.silv.database.DatabaseHandlerImpl
 import ios.silv.database.dao.TabsDao
-import ios.silv.gemclient.base.PreviewCache
+import ios.silv.shared.PreviewCache
 import ios.silv.libgemini.gemini.GeminiCache
 import ios.silv.libgemini.gemini.GeminiClient
 import ios.silv.libgemini.gemini.IGeminiCache

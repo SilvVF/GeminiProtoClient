@@ -1,4 +1,4 @@
-package ios.silv.gemclient.tab
+package ios.silv.shared.tab
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -8,10 +8,10 @@ import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import ios.silv.database.dao.TabsDao
 import ios.silv.shared.GeminiTab
-import ios.silv.gemclient.dependency.ViewModelKey
-import ios.silv.gemclient.dependency.ViewModelScope
-import ios.silv.gemclient.types.StablePage
 import ios.silv.shared.AppComposeNavigator
+import ios.silv.shared.di.ViewModelKey
+import ios.silv.shared.di.ViewModelScope
+import ios.silv.shared.types.StablePage
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map

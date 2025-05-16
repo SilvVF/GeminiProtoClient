@@ -11,6 +11,7 @@ import dev.zacsweers.metro.Extends
 import dev.zacsweers.metro.Multibinds
 import dev.zacsweers.metro.Provider
 import dev.zacsweers.metro.Provides
+import ios.silv.shared.di.ViewModelScope
 import kotlin.reflect.KClass
 
 @DependencyGraph(ViewModelScope::class)

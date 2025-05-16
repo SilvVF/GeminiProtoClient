@@ -1,8 +1,8 @@
-package ios.silv.gemclient.bar
+package ios.silv.shared.bar
 
 import ios.silv.shared.GeminiTab
-import ios.silv.gemclient.types.StablePage
-import ios.silv.gemclient.types.StableTab
+import ios.silv.shared.types.StablePage
+import ios.silv.shared.types.StableTab
 import ios.silv.shared.ui.UiState
 
 data class BarState(

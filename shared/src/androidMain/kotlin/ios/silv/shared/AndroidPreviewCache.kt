@@ -1,12 +1,14 @@
-package ios.silv.gemclient.base
+package ios.silv.shared
 
 import android.content.Context
 import android.graphics.Bitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
-import ios.silv.core.logcat.LogPriority
-import ios.silv.core.logcat.LogPriority.*
+import ios.silv.core.logcat.LogPriority.ERROR
 import ios.silv.core.logcat.logcat
 import ios.silv.core.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
@@ -15,21 +17,24 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
+import okio.Path
+import okio.Path.Companion.toOkioPath
 import java.io.File
 
+@ContributesBinding(AppScope::class)
 @SingleIn(AppScope::class)
-class PreviewCache @Inject constructor(
-    context: Context,
-) {
+class AndroidPreviewCache @Inject constructor(
+    context: Context
+): PreviewCache  {
 
     private val cacheDir = File(context.cacheDir, "tab_preview")
 
-    private val _invalidated = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val invalidated = _invalidated.asSharedFlow()
+    private val _invalidated = MutableSharedFlow<Unit>()
+    override val invalidated = _invalidated.asSharedFlow()
         .conflate()
         .onStart { emit(Unit) }
 
-    suspend fun cleanCache(tabIds: List<Long>): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun clean(tabIds: List<Long>): Boolean = withContext(Dispatchers.IO) {
         suspendRunCatching {
             val files = cacheDir.listFiles()
                 ?.filterNotNull()
@@ -54,15 +59,17 @@ class PreviewCache @Inject constructor(
 
     private fun fileKey(tabId: Long) = "tab_$tabId.png"
 
-    suspend fun writeToCache(tabId: Long, bitmap: Bitmap): Result<File> =
+    override suspend fun write(tabId: Long, bitmap: ImageBitmap): Result<Path> =
         withContext(Dispatchers.IO) {
             suspendRunCatching {
                 cacheDir.mkdirs()
                 File(cacheDir, fileKey(tabId)).also { f ->
                     f.outputStream().use { os ->
-                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, os)
+                        bitmap.asAndroidBitmap()
+                            .compress(Bitmap.CompressFormat.PNG, 100, os)
                     }
                 }
+                    .toOkioPath()
             }
                 .onSuccess {
                     logcat { "Successfully wrote to cache tab_id=${tabId}" }
@@ -70,7 +77,7 @@ class PreviewCache @Inject constructor(
                 }
         }
 
-    fun readFromCache(tabId: Long): File? {
-        return File(cacheDir, fileKey(tabId)).takeIf { it.exists() }
+    override suspend fun read(tabId: Long): Path? {
+        return File(cacheDir, fileKey(tabId)).takeIf { it.exists() }?.toOkioPath()
     }
 }

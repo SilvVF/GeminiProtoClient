@@ -1,4 +1,4 @@
-package ios.silv.gemclient.tab
+package ios.silv.shared.tab
 
 import androidx.compose.ui.graphics.ImageBitmap
 import ios.silv.shared.ui.UiEvent

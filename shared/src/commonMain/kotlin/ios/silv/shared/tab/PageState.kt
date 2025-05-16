@@ -1,10 +1,9 @@
-package ios.silv.gemclient.tab
+package ios.silv.shared.tab
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import ios.silv.libgemini.gemini.ContentNode
 import ios.silv.shared.ui.UiState
-import java.util.UUID
 
 sealed interface PageState : UiState {
 
@@ -21,7 +20,7 @@ sealed interface PageState : UiState {
         @Stable
         data class UiNode(
             val node: ContentNode,
-            val key: String = UUID.randomUUID().toString(),
+            val key: String? = null,
             val contentType: String = node::class.toString()
         )
     }

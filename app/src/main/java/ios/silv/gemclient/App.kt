@@ -13,7 +13,7 @@ import ios.silv.core.logcat.AndroidLogcatLogger
 import ios.silv.core.logcat.LogPriority
 import ios.silv.core.suspendRunCatching
 import ios.silv.database.dao.TabsDao
-import ios.silv.gemclient.base.PreviewCache
+import ios.silv.shared.PreviewCache
 import ios.silv.gemclient.dependency.AppGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +39,7 @@ class App : Application(), SingletonImageLoader.Factory {
 
         CoroutineScope(Dispatchers.IO).launch {
             suspendRunCatching {
-                previewCache.cleanCache(tabsDao.selectTabIds())
+                previewCache.clean(tabsDao.selectTabIds())
             }
         }
     }

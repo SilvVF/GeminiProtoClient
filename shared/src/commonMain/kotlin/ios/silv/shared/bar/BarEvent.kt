@@ -1,6 +1,6 @@
-package ios.silv.gemclient.bar
+package ios.silv.shared.bar
 
-import ios.silv.gemclient.types.StableTab
+import ios.silv.shared.types.StableTab
 import ios.silv.shared.ui.UiEvent
 
 sealed interface BarEvent : UiEvent {

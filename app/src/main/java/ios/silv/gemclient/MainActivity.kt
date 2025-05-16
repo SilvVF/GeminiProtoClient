@@ -12,10 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
@@ -24,8 +22,8 @@ import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.binding
-import ios.silv.gemclient.bar.BarEvent
-import ios.silv.gemclient.bar.BarPresenter
+import ios.silv.shared.bar.BarEvent
+import ios.silv.shared.bar.BarPresenter
 import ios.silv.gemclient.bar.BottombarScaffold
 import ios.silv.gemclient.base.LocalNavController
 import ios.silv.gemclient.base.LocalNavigator
@@ -42,7 +40,6 @@ import ios.silv.shared.GeminiHome
 import ios.silv.shared.settings.AppTheme
 import ios.silv.shared.settings.SettingsStore
 import ios.silv.shared.ui.rememberEventFlow
-import kotlinx.coroutines.launch
 
 
 @ContributesIntoMap(AppScope::class, binding<Activity>())
