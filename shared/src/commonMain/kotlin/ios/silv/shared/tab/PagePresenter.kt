@@ -57,6 +57,7 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.toList
+import kotlin.math.log
 
 @ContributesIntoMap(ViewModelScope::class, binding = binding<ViewModel>())
 @ViewModelKey(PageViewModel::class)
@@ -72,19 +73,32 @@ class PageViewModel(
 
     val tab = savedStateHandle.toRoute<GeminiTab>()
 
+    private val tabStateFlow = tabsDao.observeTabWithActivePage(tab.id)
+        .map { it ?: (null to null) }
+        .map { (tab, page) ->
+            when {
+                tab == null -> TabState.Error
+                page == null -> TabState.NoPages
+                else -> {
+                    TabState.Loaded(StablePage(page))
+                }
+            }
+        }
+        .distinctUntilChanged()
+
     @Composable
     override fun models(events: EventFlow<PageEvent>): PageState {
 
-        val tabState by produceState<TabState>(TabState.Idle) {
-            tabsDao.observeTabWithActivePage(tab.id)
-                .map { it ?: (null to null) }
-                .collect { (tab, page) ->
-                    value = when {
-                        tab == null -> TabState.Error
-                        page == null -> TabState.NoPages
-                        else -> TabState.Loaded(StablePage(page))
-                    }
+        var fetchId by remember { mutableIntStateOf(0) }
+        var tabState by remember { mutableStateOf<TabState>(TabState.Idle) }
+
+        LaunchedEffect(Unit) {
+            tabStateFlow.collect { state ->
+                Snapshot.withMutableSnapshot {
+                    fetchId = 0
+                    tabState = state
                 }
+            }
         }
 
         val activePage by remember {
@@ -94,8 +108,6 @@ class PageViewModel(
         var input by remember { mutableStateOf("") }
         var response by remember { mutableStateOf<Result<Response>?>(null) }
         var loading by remember { mutableStateOf(false) }
-
-        var fetchId by remember { mutableIntStateOf(0) }
 
         DisposableEffect(response) {
             logcat { "holding response $response" }
@@ -126,7 +138,7 @@ class PageViewModel(
                     loading = true
                     val res = client.makeGeminiQuery(
                         query = state.page.url,
-                        forceNetwork = fetchId > 0
+                        forceNetwork = fetchId > 1
                     )
 
                     Snapshot.withMutableSnapshot {

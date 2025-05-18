@@ -64,13 +64,9 @@ fun <EVENT : UiEvent> EventEffect(
     block: suspend CoroutineScope.(EVENT) -> Unit,
 ) {
     LaunchedEffect(eventFlow) {
-        suspendRunCatching {
-            supervisorScope {
-                eventFlow.collect { event ->
-                    launch {
-                        block(event)
-                    }
-                }
+        eventFlow.collect { event ->
+            launch {
+                suspendRunCatching { block(event) }
             }
         }
     }
