@@ -276,19 +276,6 @@ private fun <T> mutableStateSaver(inner: Saver<T, out Any>) =
     }
 
 /**
- * A side effect that will run an [impression]. This [impression] will run only once until it is
- * forgotten based on the current [RetainedStateRegistry] or until the [inputs] change. This is
- * useful for single fire side effects like logging or analytics.
- *
- * @param inputs A set of inputs that when changed will cause the [impression] to be re-run.
- * @param impression The side effect to run.
- */
-@Composable
-public fun ImpressionEffect(vararg inputs: Any?, impression: () -> Unit) {
-    rememberRetained(*inputs, block = impression)
-}
-
-/**
  * A [LaunchedEffect] that will run a suspendable [impression]. The [impression] will run once until
  * it is forgotten based on the [RetainedStateRegistry], and/or until the [inputs] change. This is
  * useful for async single fire side effects like logging or analytics.
@@ -301,14 +288,13 @@ public fun LaunchedImpressionEffect(
     vararg inputs: Any?,
     impression: suspend CoroutineScope.() -> Unit
 ) {
-   var launched by rememberRetained { mutableStateOf(inputs to false) }
-   LaunchedEffect(*inputs)  {
-       val (i, l) = launched
-       if (!l || !i.contentEquals(inputs)) {
+   var launched by rememberRetained(*inputs) { mutableStateOf(false) }
+   LaunchedEffect(*inputs, launched)  {
+       if (!launched) {
            logcat { "running impression" }
            impression()
        }
-       launched = inputs to true
+       launched = true
    }
 }
 

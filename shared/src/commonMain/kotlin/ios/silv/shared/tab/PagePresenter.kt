@@ -3,6 +3,7 @@ package ios.silv.shared.tab
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -89,21 +90,13 @@ class PageViewModel(
     @Composable
     override fun models(events: EventFlow<PageEvent>): PageState {
 
-        var fetchId by remember { mutableIntStateOf(0) }
-        var tabState by remember { mutableStateOf<TabState>(TabState.Idle) }
-
-        LaunchedEffect(Unit) {
-            tabStateFlow.collect { state ->
-                Snapshot.withMutableSnapshot {
-                    fetchId = 0
-                    tabState = state
-                }
-            }
-        }
-
+        val tabState by tabStateFlow.collectAsState(TabState.Idle)
         val activePage by remember {
             derivedStateOf { tabState.pageOrNull }
         }
+
+        val fetchId = remember(activePage) { mutableIntStateOf(0) }
+        val currentFetchId by rememberUpdatedState(fetchId)
 
         var input by remember { mutableStateOf("") }
         var response by remember { mutableStateOf<Result<Response>?>(null) }
@@ -129,8 +122,7 @@ class PageViewModel(
             }
         }
 
-
-        LaunchedEffect(activePage, fetchId) {
+        LaunchedEffect(activePage, currentFetchId.value) {
             logcat { "trying to load page $activePage" }
             when (val state = tabState) {
                 is TabState.Loaded -> {
@@ -138,7 +130,7 @@ class PageViewModel(
                     loading = true
                     val res = client.makeGeminiQuery(
                         query = state.page.url,
-                        forceNetwork = fetchId > 1
+                        forceNetwork = currentFetchId.value > 0
                     )
 
                     Snapshot.withMutableSnapshot {
@@ -184,7 +176,7 @@ class PageViewModel(
                 is PageEvent.OnInputChanged -> input = event.input
                 PageEvent.Refresh -> {
                     logcat { "refreshing" }
-                    fetchId++
+                    currentFetchId.value += 1
                 }
 
                 is PageEvent.Submit -> {
