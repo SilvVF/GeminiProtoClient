@@ -78,6 +78,7 @@ kotlin {
                 implementation(libs.jetbrains.compose.runtime)
                 implementation("org.jetbrains.androidx.navigation:navigation-compose:2.9.0-beta01")
                 implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0-beta01")
+                implementation("app.cash.molecule:molecule-runtime:2.1.0")
             }
         }
 

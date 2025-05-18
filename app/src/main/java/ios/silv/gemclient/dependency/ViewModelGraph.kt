@@ -17,7 +17,7 @@ import kotlin.reflect.KClass
 @DependencyGraph(ViewModelScope::class)
 interface ViewModelGraph {
 
-    @Multibinds(allowEmpty = true)
+    @Multibinds
     val viewModelProviders: Map<KClass<out ViewModel>, Provider<ViewModel>>
 
     @Provides

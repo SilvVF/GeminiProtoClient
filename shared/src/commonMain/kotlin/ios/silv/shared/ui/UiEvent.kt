@@ -2,6 +2,7 @@ package ios.silv.shared.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import ios.silv.core.suspendRunCatching
@@ -62,7 +63,7 @@ fun <EVENT : UiEvent> EventEffect(
     eventFlow: EventFlow<EVENT>,
     block: suspend CoroutineScope.(EVENT) -> Unit,
 ) {
-    LaunchedImpressionEffect(eventFlow) {
+    LaunchedEffect(eventFlow) {
         suspendRunCatching {
             supervisorScope {
                 eventFlow.collect { event ->
