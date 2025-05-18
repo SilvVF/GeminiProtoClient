@@ -1,8 +1,11 @@
 package ios.silv.shared.tab
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisallowComposableCalls
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -46,19 +49,14 @@ import ios.silv.shared.ui.produceRetainedState
 import ios.silv.shared.ui.rememberRetained
 import ios.silv.shared.ui.rememberRetainedCoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.onStart
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.toList
-import kotlin.math.log
 
 @ContributesIntoMap(ViewModelScope::class, binding = binding<ViewModel>())
 @ViewModelKey(PageViewModel::class)
@@ -90,17 +88,24 @@ class PageViewModel(
     @Composable
     override fun models(events: EventFlow<PageEvent>): PageState {
 
-        val tabState by tabStateFlow.collectAsState(TabState.Idle)
-        val activePage by remember {
-            derivedStateOf { tabState.pageOrNull }
+        var tabState by remember { mutableStateOf<TabState>(TabState.Idle) }
+        var fetchId by remember { mutableIntStateOf(0) }
+
+        LaunchedEffect(Unit) {
+            tabStateFlow.collect { state ->
+                Snapshot.withMutableSnapshot {
+                    tabState = state
+                    fetchId = 0
+                }
+            }
         }
 
-        val fetchId = remember(activePage) { mutableIntStateOf(0) }
-        val currentFetchId by rememberUpdatedState(fetchId)
 
         var input by remember { mutableStateOf("") }
         var response by remember { mutableStateOf<Result<Response>?>(null) }
         var loading by remember { mutableStateOf(false) }
+
+        val activePage by remember { derivedStateOf { tabState.pageOrNull } }
 
         DisposableEffect(response) {
             logcat { "holding response $response" }
@@ -111,31 +116,35 @@ class PageViewModel(
             }
         }
 
-        LaunchedEffect(response) {
-            response?.onSuccess {
-                settingsStore.edit { p ->
-                    p[Keys.recentlyViewed] = buildSet {
-                        add(tabState.pageOrNull?.url ?: return@edit)
-                        addAll(p[Keys.recentlyViewed].orEmpty().take(9))
+        val page = activePage
+        val res = response
+        if (page != null && res != null) {
+            LaunchedEffect(response) {
+                res.onSuccess {
+                    settingsStore.edit { prefs ->
+                        prefs[Keys.recentlyViewed] = buildSet {
+                            add(page.url)
+                            addAll(prefs[Keys.recentlyViewed].orEmpty().take(9))
+                        }
                     }
                 }
             }
         }
 
-        LaunchedEffect(activePage, currentFetchId.value) {
+        LaunchedEffect(activePage, fetchId) {
             logcat { "trying to load page $activePage" }
             when (val state = tabState) {
                 is TabState.Loaded -> {
                     logcat { "loading page ${state.page} fetchId $fetchId" }
                     loading = true
-                    val res = client.makeGeminiQuery(
+                    val result = client.makeGeminiQuery(
                         query = state.page.url,
-                        forceNetwork = currentFetchId.value > 0
+                        forceNetwork = fetchId > 0
                     )
 
                     Snapshot.withMutableSnapshot {
                         loading = false
-                        response = res
+                        response = result
                     }
 
                 }
@@ -176,7 +185,7 @@ class PageViewModel(
                 is PageEvent.OnInputChanged -> input = event.input
                 PageEvent.Refresh -> {
                     logcat { "refreshing" }
-                    currentFetchId.value += 1
+                    fetchId++
                 }
 
                 is PageEvent.Submit -> {
@@ -231,7 +240,6 @@ class PageViewModel(
             TabState.Idle -> PageState.Loading
             TabState.NoPages -> PageState.Blank
             is TabState.Loaded -> {
-                val res = response
                 when {
                     loading || res == null -> PageState.Ready.Loading(state.page)
                     else -> {

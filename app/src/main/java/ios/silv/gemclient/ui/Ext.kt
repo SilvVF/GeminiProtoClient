@@ -7,10 +7,13 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.SwipeToDismissBoxState
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisallowComposableCalls
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -26,6 +29,37 @@ import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+
+/***
+remembers the most recent mutable state and proxies
+all reads and writes current mutable state
+
+ends up being mutableStateOf(mutableStateOf())
+proxy the read and write to the inner mutable state
+ ***/
+@Composable
+fun <T> rememberMutableState(
+    vararg keys: Any?,
+    calculation: @DisallowComposableCalls () -> MutableState<T>
+): MutableState<T> {
+    val state = remember(*keys) { calculation() }
+    // ends up being a mutableStateOf MutableState
+    val currentState by rememberUpdatedState(state)
+
+    return remember {
+        object : MutableState<T> {
+            override var value: T
+                get() = currentState.value
+                set(value) {
+                    currentState.value = value
+                }
+
+            override fun component1(): T = value
+            override fun component2(): (T) -> Unit = { value = it }
+        }
+    }
+}
+
 
 @Composable
 fun LazyListState.sampleScrollingState(sample: Duration = 800.milliseconds): State<Boolean> {
