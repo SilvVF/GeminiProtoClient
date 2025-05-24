@@ -11,7 +11,7 @@ kotlin {
     androidLibrary {
         namespace = "ios.silv.libgemini"
         compileSdk = 35
-        minSdk = 24
+        minSdk = 26
 
         withHostTestBuilder {
         }
@@ -65,6 +65,8 @@ kotlin {
                 implementation(libs.kotlinx.serialization.json)
 
                 implementation(libs.kotlin.coroutines.core)
+                implementation(libs.androidx.datastore.core)
+                implementation("com.squareup.okio:okio:3.11.0")
 
                 implementation(project(":core"))
             }

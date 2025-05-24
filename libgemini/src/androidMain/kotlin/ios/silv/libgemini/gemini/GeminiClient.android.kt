@@ -1,48 +1,90 @@
 package ios.silv.libgemini.gemini
 
+import android.annotation.SuppressLint
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import io.ktor.http.Url
 import io.ktor.network.tls.TLSConfigBuilder
-import io.ktor.network.tls.addKeyStore
-import java.io.ByteArrayInputStream
-import java.security.KeyStore
-import java.security.PrivateKey
+import ios.silv.core.logcat.logcat
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
+import java.security.MessageDigest
 import java.security.SecureRandom
-import java.security.cert.CertificateFactory
+import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
+import java.util.Date
 import javax.net.ssl.X509TrustManager
+import kotlin.time.ExperimentalTime
+import kotlin.time.toKotlinInstant
 
-private fun buildTlsCertificateIfNeeded(certPEM: ByteArray, keyPEM: ByteArray): Result<KeyStore> {
-    return runCatching {
-
-        if (certPEM.isEmpty() || keyPEM.isEmpty()) {
-            error("byte array was empty when trying to build cert")
-        }
-
-        val certFactory = CertificateFactory.getInstance("X.509")
-        val cert = certFactory.generateCertificate(ByteArrayInputStream(certPEM))
-
-        val keyFactory = java.security.KeyFactory.getInstance("RSA")
-        val privateKey: PrivateKey = keyFactory.generatePrivate(java.security.spec.PKCS8EncodedKeySpec(keyPEM))
-
-
-        val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
-        keyStore.load(null, null) // Initialize an empty keystore
-        keyStore.setCertificateEntry("certificate", cert)
-        keyStore.setKeyEntry("privateKey", privateKey, null, arrayOf(cert))
-
-        keyStore
-    }
+private fun X509Certificate.sha256PublicKeyFingerprint(): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    val hash = digest.digest(publicKey.encoded)
+    return hash.joinToString(":") { "%02X".format(it) }
 }
 
-fun getTrustManager(): X509TrustManager {
+@SuppressLint("CustomX509TrustManager")
+@OptIn(ExperimentalTime::class)
+private fun createTofuTrustManager(
+    store: DataStore<Preferences>,
+    host: String,
+    port: String
+): X509TrustManager {
     return object : X509TrustManager {
-        override fun checkClientTrusted(p0: Array<out X509Certificate>?, p1: String?) {
+
+        private val fingerprintKey = stringPreferencesKey("fingerprint_$host:$port")
+        private val expiryKey = longPreferencesKey("expiry_$host:$port")
+
+        private fun loadStoredFingerprint() = runBlocking {
+            store.data.map { it[fingerprintKey] }.firstOrNull()
         }
 
-        override fun checkServerTrusted(p0: Array<out X509Certificate>?, p1: String?) {
-
+        private fun loadExpiration() = runBlocking {
+            store.data.map { it[expiryKey] }.firstOrNull() ?: -1
         }
 
+        private fun setExpiration(expiry: Date?) = runBlocking {
+            store.edit {
+                it[expiryKey] = expiry?.toInstant()?.epochSecond ?: -1
+            }
+        }
+
+        private fun setStoredFingerprint(fingerprint: String) = runBlocking {
+            store.edit {
+                it[fingerprintKey] = fingerprint
+            }
+        }
+
+        override fun checkClientTrusted(chain: Array<out X509Certificate>, authType: String) {
+            throw UnsupportedOperationException("Client trust not supported")
+        }
+
+        override fun checkServerTrusted(chain: Array<out X509Certificate>, authType: String) {
+            logcat { "checking server trust $host:$port chain = ${chain.size}" }
+            val cert = chain.getOrNull(0)
+                ?:throw CertificateException("no certificate found for $host:$port")
+
+            val fingerprint = cert.sha256PublicKeyFingerprint()
+            val storedFingerprint = loadStoredFingerprint()
+            val storedExpiration = loadExpiration()
+
+            val epochSeconds = System.currentTimeMillis() / 1000
+
+            if (storedFingerprint == null || epochSeconds > storedExpiration) {
+                logcat { "First time connecting, trusting fingerprint: $fingerprint" }
+                setStoredFingerprint(fingerprint)
+                setExpiration(cert.notAfter)
+            } else if (storedFingerprint != fingerprint) {
+                logcat { "server not trusted $host:$port" }
+                throw CertificateException("Server certificate fingerprint mismatch")
+            } else {
+                logcat { "verified server $host:$port expiresAt=$epochSeconds" }
+            }
+        }
 
         override fun getAcceptedIssuers(): Array<X509Certificate> {
             return emptyArray()
@@ -50,17 +92,7 @@ fun getTrustManager(): X509TrustManager {
     }
 }
 
-internal actual fun TLSConfigBuilder.applyPlatformTlsConfig(
-    url: Url,
-    port: Int,
-    certPEM: ByteArray,
-    keyPEM: ByteArray
-) {
-    random = SecureRandom()
-    val keystore = buildTlsCertificateIfNeeded(certPEM, keyPEM).getOrNull()
-    if (keystore != null) {
-        addKeyStore(keystore, null, "certificate")
-    } else {
-        trustManager = getTrustManager()
-    }
+internal actual fun TLSConfigBuilder.applyPlatformTofuConfig(url: Url, store: DataStore<Preferences>) {
+    this.random = SecureRandom()
+    this.trustManager = createTofuTrustManager(store, url.host, "${url.port}")
 }

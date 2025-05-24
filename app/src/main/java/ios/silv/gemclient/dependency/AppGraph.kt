@@ -22,6 +22,8 @@ import ios.silv.libgemini.gemini.GeminiClient
 import ios.silv.libgemini.gemini.IGeminiCache
 import ios.silv.shared.AppComposeNavigator
 import ios.silv.shared.datastore.createDataStoreAndroid
+import ios.silv.shared.datastore.dataStoreFileName
+import ios.silv.shared.datastore.tofuDatastoreFileName
 import ios.silv.shared.settings.SettingsStore
 import ios.silv.sqldelight.Tab
 import kotlin.reflect.KClass
@@ -51,7 +53,7 @@ interface AppGraph {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideDataStore(): DataStore<Preferences> = createDataStoreAndroid(context)
+    fun provideDataStore(): DataStore<Preferences> = createDataStoreAndroid(context, dataStoreFileName)
 
     @Provides
     @SingleIn(AppScope::class)
@@ -71,7 +73,10 @@ interface AppGraph {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideGeminiClient(cache: IGeminiCache): GeminiClient = GeminiClient(cache)
+    fun provideGeminiClient(cache: IGeminiCache): GeminiClient = GeminiClient(
+        cache,
+        createDataStoreAndroid(context, tofuDatastoreFileName)
+    )
 
     /**
      * A multibinding map of activity classes to their providers accessible for

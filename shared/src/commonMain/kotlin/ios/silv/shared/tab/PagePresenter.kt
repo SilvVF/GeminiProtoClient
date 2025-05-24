@@ -100,12 +100,11 @@ class PageViewModel(
             }
         }
 
-
         var input by remember { mutableStateOf("") }
         var response by remember { mutableStateOf<Result<Response>?>(null) }
         var loading by remember { mutableStateOf(false) }
 
-        val activePage by remember { derivedStateOf { tabState.pageOrNull } }
+        val activePage by remember(tabState) { derivedStateOf { tabState.pageOrNull } }
 
         DisposableEffect(response) {
             logcat { "holding response $response" }
@@ -146,7 +145,6 @@ class PageViewModel(
                         loading = false
                         response = result
                     }
-
                 }
 
                 else -> logcat { "refresh called while tabstate=$state" }

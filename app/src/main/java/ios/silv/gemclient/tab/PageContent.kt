@@ -8,13 +8,10 @@ import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
@@ -34,7 +31,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -43,7 +39,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -60,9 +56,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
@@ -252,7 +245,7 @@ private fun PageReadyContent(
     val listState = rememberLazyListState()
     val savedScrollPositions = rememberRetained { mutableMapOf<StablePage, Int>() }
 
-    LaunchedImpressionEffect(pageState.page) {
+    LaunchedEffect(pageState.page) {
         val lastScrollIdx = savedScrollPositions[pageState.page] ?: 0
         launch {
             listState.scrollToItem(lastScrollIdx)
@@ -268,8 +261,8 @@ private fun PageReadyContent(
         navBlock = {
             NavBlock(
                 listState = listState,
-                pageState = pageState,
-                pageEvents = pageEvents
+                state = pageState,
+                events = pageEvents
             )
         },
         stdOutBlock = {
@@ -284,8 +277,8 @@ private fun PageReadyContent(
 
 @Composable
 private fun NavBlock(
-    pageState: PageState.Ready,
-    pageEvents: EventFlow<PageEvent>,
+    state: PageState.Ready,
+    events: EventFlow<PageEvent>,
     listState: LazyListState,
 ) {
     val scope = rememberCoroutineScope()
@@ -294,18 +287,18 @@ private fun NavBlock(
             TerminalSectionDefaults.Label("nav")
         }
     ) {
-        val headings by remember(pageState) {
+        val headings by remember(state) {
             derivedStateOf {
-                pageState.nodesOrNull
+                state.nodesOrNull
                     ?.map { it.node }
                     ?.filterIsInstance<ContentNode.Line.Heading>()
                     .orEmpty()
             }
         }
-        val current by produceState<ContentNode.Line.Heading?>(null, listState, pageState) {
+        val current by produceState<ContentNode.Line.Heading?>(null, listState, state) {
             snapshotFlow {
                 listState.layoutInfo.visibleItemsInfo.firstNotNullOfOrNull {
-                    val node = pageState.nodesOrNull?.getOrNull(it.index)?.node
+                    val node = state.nodesOrNull?.getOrNull(it.index)?.node
                     node as? ContentNode.Line.Heading
                 }
             }
@@ -324,7 +317,7 @@ private fun NavBlock(
             ) { node ->
                 TextButton(
                     onClick = {
-                        pageState.nodesOrNull?.let { uiNodes ->
+                        state.nodesOrNull?.let { uiNodes ->
                             val i = uiNodes.indexOfFirst { uiNode -> uiNode.node == node }
                             if (i != -1) {
                                 scope.launch {
@@ -357,14 +350,13 @@ private fun NavBlock(
 @Composable
 private fun StdOutBlock(
     pageState: PageState.Ready,
-    pageEvents: EventFlow<PageEvent>,
+    events: EventFlow<PageEvent>,
     listState: LazyListState,
 ) {
     val captureController = rememberCaptureController()
     val scope = rememberCoroutineScope()
 
     val controller by rememberUpdatedState(captureController)
-    val events by rememberUpdatedState(pageEvents)
 
     TerminalSection(
         modifier = Modifier.padding(horizontal = TerminalSectionDefaults.horizontalPadding),

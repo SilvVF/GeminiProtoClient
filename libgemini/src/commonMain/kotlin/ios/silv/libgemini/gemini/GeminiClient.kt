@@ -1,5 +1,7 @@
 package ios.silv.libgemini.gemini
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.set
@@ -54,12 +56,11 @@ data class ClientConfig(
     val maxRedirects: Int = 5
 )
 
-internal expect fun TLSConfigBuilder.applyPlatformTlsConfig(
-    url: Url, port: Int, certPEM: ByteArray, keyPEM: ByteArray
-)
+internal expect fun TLSConfigBuilder.applyPlatformTofuConfig(url: Url, store: DataStore<Preferences>)
 
 class GeminiClient(
     private val cache: IGeminiCache,
+    private val store: DataStore<Preferences>,
     private val config: ClientConfig = ClientConfig()
 ) {
 
@@ -71,23 +72,13 @@ class GeminiClient(
         forceNetwork: Boolean = false,
         cacheEnabled: Boolean = true
     ): Result<Response> {
-        return withContext(config.dispatcher) { fetch(query, forceNetwork, cacheEnabled) }
-    }
-
-    private suspend fun fetch(
-        rawUrl: String,
-        forceNetwork: Boolean,
-        cacheEnabled: Boolean
-    ): Result<Response> {
-        return suspendRunCatching {
-            fetchWithHostAndCert(
-                Url(rawUrl),
-                byteArrayOf(),
-                byteArrayOf(),
+        return withContext(config.dispatcher) {
+            fetch(
+                url = Url(query),
                 forceNetwork,
                 cacheEnabled,
                 redirected = 0
-            ).getOrThrow()
+            )
         }
     }
 
@@ -101,10 +92,8 @@ class GeminiClient(
                 val header = consumeHeader(source).getOrThrow()
 
                 if (header.status == GeminiCode.REDIRECT_PERMANENT) {
-                    return@suspendRunCatching fetchWithHostAndCert(
+                    return@suspendRunCatching fetch(
                         Url(header.meta),
-                        byteArrayOf(),
-                        byteArrayOf(),
                         false,
                         cacheEnabled,
                         redirected = (redirected + 1)
@@ -131,23 +120,18 @@ class GeminiClient(
 
     private suspend fun openNewConnection(
         url: Url,
-        port: Int,
-        certPEM: ByteArray,
-        keyPEM: ByteArray
     ): Socket {
         return aSocket(selector).tcp().connect(
             url.host,
-            port,
+            url.port,
         )
             .tls(Dispatchers.IO) {
-                applyPlatformTlsConfig(url, port, certPEM, keyPEM)
+                applyPlatformTofuConfig(url, store)
             }
     }
 
-    private suspend fun fetchWithHostAndCert(
+    private suspend fun fetch(
         url: Url,
-        certPEM: ByteArray,
-        keyPEM: ByteArray,
         forceNetwork: Boolean,
         cacheEnabled: Boolean,
         redirected: Int
@@ -185,11 +169,13 @@ class GeminiClient(
                     port = 1965
                 }
             }
-            val port = urlBuilder.build().port
 
-            logcat { "Trying to connect to ${url.host} $port - $url" }
+            val url = urlBuilder.build()
 
-            openNewConnection(url, port, keyPEM, certPEM).use { conn ->
+            logcat { "Trying to connect to ${url.host}:${url.port} - $url" }
+
+
+            openNewConnection(url).use { conn ->
                 val writeChannel = conn.openWriteChannel(true)
                 val readChannel = conn.openReadChannel()
 
@@ -206,7 +192,11 @@ class GeminiClient(
                     GeminiCode.REDIRECT_PERMANENT,
                     GeminiCode.REDIRECT_TEMPORARY -> {
                         handleRedirect(
-                            header, redirected, url, certPEM, keyPEM, forceNetwork, cacheEnabled
+                            header,
+                            redirected,
+                            url,
+                            forceNetwork,
+                            cacheEnabled
                         )
                     }
 
@@ -234,8 +224,6 @@ class GeminiClient(
         header: Header,
         redirected: Int,
         url: Url,
-        certPEM: ByteArray,
-        keyPEM: ByteArray,
         forceNetwork: Boolean,
         cacheEnabled: Boolean,
     ): Response {
@@ -251,8 +239,8 @@ class GeminiClient(
             )
         }
 
-        return fetchWithHostAndCert(
-            Url(header.meta), certPEM, keyPEM,
+        return fetch(
+            Url(header.meta),
             forceNetwork,
             cacheEnabled,
             (redirected + 1)

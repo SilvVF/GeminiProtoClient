@@ -3,6 +3,7 @@ package ios.silv.gemclient.tab
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import ios.silv.gemclient.bar.BarMode
@@ -19,7 +20,7 @@ fun NavGraphBuilder.geminiTabDestination() {
 
         val presenter = metroViewModel<PageViewModel>()
 
-        val state by presenter.models.collectAsState()
+        val state by presenter.models.collectAsStateWithLifecycle()
 
         val barMode = LocalBarMode.current
         val ime by isImeVisibleAsState()
