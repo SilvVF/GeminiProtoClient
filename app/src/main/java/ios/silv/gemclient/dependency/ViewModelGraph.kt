@@ -1,11 +1,14 @@
 package ios.silv.gemclient.dependency
 
 import android.app.Application
+import androidx.lifecycle.SAVED_STATE_REGISTRY_OWNER_KEY
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.VIEW_MODEL_STORE_OWNER_KEY
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.navigation3.runtime.NavKey
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metro.Extends
 import dev.zacsweers.metro.Multibinds
@@ -34,6 +37,7 @@ interface ViewModelGraph {
         fun create(
             @Extends appGraph: AppGraph,
             @Provides creationExtras: CreationExtras,
+            @Provides navKey: ios.silv.shared.NavKey,
         ): ViewModelGraph
     }
 }

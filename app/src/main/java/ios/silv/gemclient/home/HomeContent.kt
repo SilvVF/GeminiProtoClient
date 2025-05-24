@@ -32,6 +32,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
+import androidx.navigation3.runtime.EntryProvider
+import androidx.navigation3.runtime.EntryProviderBuilder
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entry
+import androidx.navigation3.runtime.rememberSavedStateNavEntryDecorator
+import ios.silv.gemclient.BottomBarSinglePaneScene
 import ios.silv.shared.GeminiHome
 import ios.silv.shared.GeminiSettings
 import ios.silv.gemclient.base.LocalNavigator
@@ -43,11 +49,14 @@ import ios.silv.gemclient.ui.components.TerminalSectionDefaults
 import ios.silv.shared.home.HomeEvent
 import ios.silv.shared.home.HomePresenter
 import ios.silv.shared.home.HomeUiState
+import ios.silv.shared.toTopLevel
 import ios.silv.shared.ui.EventFlow
 import ios.silv.shared.ui.rememberEventFlow
 
-fun NavGraphBuilder.geminiHomeDestination() {
-    composable<GeminiHome> {
+fun EntryProviderBuilder<ios.silv.shared.NavKey>.geminiHomeDestination() {
+    entry<GeminiHome>(
+        metadata = mapOf(BottomBarSinglePaneScene.BOTTOM_BAR_KEY to true)
+    ) {
         val presenter = metroPresenter<HomePresenter>()
 
         val eventsFlow = rememberEventFlow<HomeEvent>()
@@ -198,7 +207,7 @@ private fun HomeTopAppBar(
                     TerminalSectionDefaults.Label("settings", color = containerColor)
                 },
                 onClick = {
-                    navigator.topLevelDest.tryEmit(GeminiSettings)
+                    navigator.navCmds.tryEmit(toTopLevel(GeminiSettings))
                 }
             ) {
                 Icon(

@@ -10,8 +10,8 @@ kotlin {
     // See: https://kotlinlang.org/docs/multiplatform-discover-project.html#targets
     androidLibrary {
         namespace = "ios.silv.libgemini"
-        compileSdk = 35
-        minSdk = 26
+        compileSdk = libs.versions.compileSdk.get().toInt()
+        minSdk = libs.versions.minSdk.get().toInt()
 
         withHostTestBuilder {
         }
@@ -47,6 +47,15 @@ kotlin {
     iosSimulatorArm64 {
         binaries.framework {
             baseName = xcfName
+        }
+    }
+
+    listOf(
+        iosArm64(),
+        iosX64(),
+    ).forEach {
+        it.binaries.all {
+            linkerOpts("-framework", "CoreFoundation")
         }
     }
 
@@ -106,5 +115,4 @@ kotlin {
             }
         }
     }
-
 }

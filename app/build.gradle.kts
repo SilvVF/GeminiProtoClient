@@ -9,12 +9,12 @@ plugins {
 
 android {
     namespace = "ios.silv.gemclient"
-    compileSdk = 35
+    compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
         applicationId = "ios.silv.p2pstream"
-        minSdk = 28
-        targetSdk = 35
+        minSdk = libs.versions.minSdk.get().toInt()
+        targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
         versionName = "1.0"
 
@@ -82,6 +82,14 @@ dependencies {
 
     implementation(libs.bundles.compose.ui)
     implementation(libs.bundles.compose.runtime)
+
+    implementation(libs.compose.navigation)
+    implementation(libs.androidx.navigation3.ui)
+    implementation(libs.androidx.navigation3.runtime)
+    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+    implementation(libs.kotlinx.serialization.core)
+    implementation(libs.kotlinx.serialization.json)
+
 
     implementation(libs.kotlinx.serialization.json)
 

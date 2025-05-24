@@ -10,6 +10,7 @@ import ios.silv.shared.datastore.Keys
 import ios.silv.shared.di.Presenter
 import ios.silv.shared.di.PresenterKey
 import ios.silv.shared.di.PresenterScope
+import ios.silv.shared.toTopLevel
 import ios.silv.shared.ui.EventEffect
 import ios.silv.shared.ui.EventFlow
 import ios.silv.shared.ui.collectAsRetainedState
@@ -43,7 +44,7 @@ class SettingsPresenter(
                     it[Keys.incognito] = !incognito
                 }
 
-                SettingsEvent.NavigateHome -> navigator.topLevelDest.tryEmit(GeminiHome)
+                SettingsEvent.NavigateHome -> navigator.navCmds.tryEmit(toTopLevel(GeminiHome))
             }
         }
 

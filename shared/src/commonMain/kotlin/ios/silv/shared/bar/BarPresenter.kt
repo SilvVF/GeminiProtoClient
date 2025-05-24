@@ -2,12 +2,15 @@ package ios.silv.shared.bar
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -19,11 +22,14 @@ import ios.silv.database.dao.TabsDao
 import ios.silv.shared.AppComposeNavigator
 import ios.silv.shared.GeminiHome
 import ios.silv.shared.GeminiTab
+import ios.silv.shared.NavKey
 import ios.silv.shared.PreviewCache
 import ios.silv.shared.di.Presenter
 import ios.silv.shared.di.PresenterKey
 import ios.silv.shared.di.PresenterScope
+import ios.silv.shared.home.HomeEvent
 import ios.silv.shared.toRouteOrNull
+import ios.silv.shared.toTopLevel
 import ios.silv.shared.types.StablePage
 import ios.silv.shared.types.StableTab
 import ios.silv.shared.ui.EventEffect
@@ -43,7 +49,7 @@ class BarPresenter(
     private val tabsDao: TabsDao,
     private val navigator: AppComposeNavigator,
     private val previewCache: PreviewCache,
-    private val navController: NavController,
+    private val backstack: SnapshotStateList<NavKey>,
 ) : Presenter {
 
     private fun <T> updateListPreserveOrder(
@@ -77,12 +83,14 @@ class BarPresenter(
             mutableStateListOf<Triple<StableTab, StablePage?, String?>>()
         }
 
-        val navBackStackEntry by navController.currentBackStackEntryAsState()
+        val navBackStackEntry by remember {
+            derivedStateOf { backstack.lastOrNull() }
+        }
         val tabs by tabsWithActivePageFlow.collectAsRetainedState(emptyList())
 
         val visibleTab by produceState<GeminiTab?>(null) {
             snapshotFlow { navBackStackEntry }.filterNotNull()
-                .map { it.toRouteOrNull<GeminiTab>() }
+                .map { it as? GeminiTab }
                 .onEach { value = it }
                 .filterNotNull()
                 .flatMapLatest {
@@ -118,7 +126,7 @@ class BarPresenter(
                     val tab = tabsDao.insertTab(null)
 
                     navigator.navCmds.tryEmit {
-                        navigate(GeminiTab(tab.tid))
+                        add(GeminiTab(tab.tid))
                     }
                 }
 
@@ -130,7 +138,7 @@ class BarPresenter(
                     val tab = tabsDao.insertTab(query)
 
                     navigator.navCmds.tryEmit {
-                        navigate(GeminiTab(tab.tid))
+                        add(GeminiTab(tab.tid))
                     }
                 }
 
@@ -139,7 +147,7 @@ class BarPresenter(
                 }
 
                 is BarEvent.GoToTab -> {
-                    navigator.navCmds.tryEmit { navigate(GeminiTab(id = event.tab.id)) }
+                    navigator.navCmds.tryEmit { add(GeminiTab(id = event.tab.id)) }
                 }
 
                 is BarEvent.ReorderTabs -> {
@@ -151,7 +159,7 @@ class BarPresenter(
 
                 is BarEvent.SearchChanged -> query = event.query
                 BarEvent.GoToHome -> {
-                    navigator.topLevelDest.tryEmit(GeminiHome)
+                    navigator.navCmds.tryEmit(toTopLevel(GeminiHome))
                 }
             }
         }
@@ -160,8 +168,7 @@ class BarPresenter(
             tabs = orderedTabs,
             query = query,
             activeTab = visibleTab,
-            showSearchbar = navBackStackEntry?.destination?.hasRoute(GeminiTab::class) == true ||
-                    navBackStackEntry?.destination?.hasRoute(GeminiHome::class) == true
+            showSearchbar = true
         )
     }
 }

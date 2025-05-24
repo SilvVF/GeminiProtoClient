@@ -20,6 +20,7 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.navigation.toRoute
+import androidx.savedstate.SavedState
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.binding
@@ -33,6 +34,7 @@ import ios.silv.libgemini.gemini.Response
 import ios.silv.shared.AppComposeNavigator
 import ios.silv.shared.GeminiTab
 import ios.silv.shared.MoleculeViewModel
+import ios.silv.shared.NavKey
 import ios.silv.shared.PreviewCache
 import ios.silv.shared.datastore.Keys
 import ios.silv.shared.di.Presenter
@@ -57,6 +59,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.toList
+import kotlin.math.log
 
 @ContributesIntoMap(ViewModelScope::class, binding = binding<ViewModel>())
 @ViewModelKey(PageViewModel::class)
@@ -67,10 +70,8 @@ class PageViewModel(
     private val tabsDao: TabsDao,
     private val navigator: AppComposeNavigator,
     private val settingsStore: SettingsStore,
-    savedStateHandle: SavedStateHandle,
+    private val tab: GeminiTab,
 ) : MoleculeViewModel<PageEvent, PageState>() {
-
-    val tab = savedStateHandle.toRoute<GeminiTab>()
 
     private val tabStateFlow = tabsDao.observeTabWithActivePage(tab.id)
         .map { it ?: (null to null) }
@@ -208,7 +209,7 @@ class PageViewModel(
                         tabsDao.deleteTab(tab.id)
 
                         navigator.navCmds.tryEmit {
-                            popBackStack(tab::class, true)
+                            remove(tab)
                         }
                     }
                 }
@@ -217,7 +218,7 @@ class PageViewModel(
                 is PageEvent.CreateTab -> {
                     val newTab = tabsDao.insertTab(event.link)
                     navigator.navCmds.tryEmit {
-                        navigate(GeminiTab(id = newTab.tid))
+                        add(GeminiTab(id = newTab.tid))
                     }
                 }
             }
@@ -228,7 +229,7 @@ class PageViewModel(
 
                 LaunchedEffect(Unit) {
                     navigator.navCmds.tryEmit {
-                        popBackStack(tab::class, true)
+                        remove(tab)
                     }
                 }
 
@@ -335,7 +336,7 @@ class PagePresenter @Inject constructor(
                         tabsDao.deleteTab(tab.id)
 
                         navigator.navCmds.tryEmit {
-                            popBackStack(tab::class, true)
+                            remove(tab)
                         }
                     }
                 }
@@ -344,7 +345,7 @@ class PagePresenter @Inject constructor(
                 is PageEvent.CreateTab -> {
                     val newTab = tabsDao.insertTab(event.link)
                     navigator.navCmds.tryEmit {
-                        navigate(GeminiTab(id = newTab.tid))
+                        add(GeminiTab(id = newTab.tid))
                     }
                 }
             }
@@ -355,7 +356,7 @@ class PagePresenter @Inject constructor(
 
                 LaunchedEffect(Unit) {
                     navigator.navCmds.tryEmit {
-                        popBackStack(tab::class, true)
+                        remove(tab)
                     }
                 }
 

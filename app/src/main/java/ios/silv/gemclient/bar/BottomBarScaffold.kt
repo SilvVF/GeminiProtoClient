@@ -181,52 +181,44 @@ fun BottombarScaffold(
         }
     }
     Scaffold(
-        modifier
-            .fillMaxSize(),
+        modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            AnimatedVisibility(
-                visible = state.showSearchbar,
+            BottomSearchBar(
+                barModeTransition = barModeTransition,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .wrapContentHeight()
-            ) {
-                BottomSearchBar(
-                    barModeTransition = barModeTransition,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.safeContent.only(WindowInsetsSides.Bottom)),
-                    focusRequester = focusRequester,
-                    onFocusChanged = { focusState ->
-                        if (focusState.hasFocus) {
-                            barMode.targetState = BarMode.SEARCHING
-                        }
-                    },
-                    onHomeClicked = {
-                        events.tryEmit(BarEvent.GoToHome)
-                    },
-                    searchText = state.query,
-                    onTextChanged = {
-                        events.tryEmit(SearchChanged(it))
-                    },
-                    tabsCount = state.tabs.size,
-                    onSearch = {
-                        val tab = state.activeTab
-                        if (tab != null) {
-                            events.tryEmit(CreateNewPage(tab.id))
-                        } else {
-                            events.tryEmit(CreateNewTab)
-                        }
-                    },
-                    toggleEditing = {
-                        barMode.targetState = if (barMode.currentState == BarMode.EDITING) {
-                            BarMode.NONE
-                        } else {
-                            BarMode.EDITING
-                        }
+                    .windowInsetsPadding(WindowInsets.safeContent.only(WindowInsetsSides.Bottom)),
+                focusRequester = focusRequester,
+                onFocusChanged = { focusState ->
+                    if (focusState.hasFocus) {
+                        barMode.targetState = BarMode.SEARCHING
                     }
-                )
-            }
+                },
+                onHomeClicked = {
+                    events.tryEmit(BarEvent.GoToHome)
+                },
+                searchText = state.query,
+                onTextChanged = {
+                    events.tryEmit(SearchChanged(it))
+                },
+                tabsCount = state.tabs.size,
+                onSearch = {
+                    val tab = state.activeTab
+                    if (tab != null) {
+                        events.tryEmit(CreateNewPage(tab.id))
+                    } else {
+                        events.tryEmit(CreateNewTab)
+                    }
+                },
+                toggleEditing = {
+                    barMode.targetState = if (barMode.currentState == BarMode.EDITING) {
+                        BarMode.NONE
+                    } else {
+                        BarMode.EDITING
+                    }
+                }
+            )
         },
         floatingActionButton = {
             barModeTransition.AnimatedVisibility(

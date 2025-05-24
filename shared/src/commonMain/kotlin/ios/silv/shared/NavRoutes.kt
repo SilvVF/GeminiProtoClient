@@ -2,10 +2,11 @@ package ios.silv.shared
 
 import kotlinx.serialization.Serializable
 
+expect interface NavKey
 
-sealed interface TopLevelDest
+sealed interface TopLevelDest: NavKey
 
-sealed interface Screen
+sealed interface Screen: NavKey
 
 @Serializable
 data object GeminiHome: TopLevelDest

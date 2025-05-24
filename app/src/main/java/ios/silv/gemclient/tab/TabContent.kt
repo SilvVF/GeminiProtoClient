@@ -1,11 +1,13 @@
 package ios.silv.gemclient.tab
 
+import android.os.Bundle
 import androidx.activity.compose.BackHandler
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavGraphBuilder
-import androidx.navigation.compose.composable
+import androidx.navigation3.runtime.EntryProviderBuilder
+import androidx.navigation3.runtime.entry
+import androidx.savedstate.compose.LocalSavedStateRegistryOwner
+import ios.silv.gemclient.BottomBarSinglePaneScene
 import ios.silv.gemclient.bar.BarMode
 import ios.silv.gemclient.bar.LocalBarMode
 import ios.silv.gemclient.dependency.metroViewModel
@@ -14,11 +16,11 @@ import ios.silv.shared.GeminiTab
 import ios.silv.shared.tab.PageEvent
 import ios.silv.shared.tab.PageViewModel
 
-fun NavGraphBuilder.geminiTabDestination() {
-    composable<GeminiTab> {
-
-
-        val presenter = metroViewModel<PageViewModel>()
+fun EntryProviderBuilder<ios.silv.shared.NavKey>.geminiTabDestination() {
+    entry<GeminiTab>(
+        metadata = mapOf(BottomBarSinglePaneScene.BOTTOM_BAR_KEY to true)
+    ) {
+        val presenter = metroViewModel<PageViewModel>(it)
 
         val state by presenter.models.collectAsStateWithLifecycle()
 

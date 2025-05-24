@@ -41,7 +41,7 @@ class HomePresenter(
                     val tab = tabsDao.insertTab(event.url)
 
                     navigator.navCmds.emit {
-                        navigate(GeminiTab(tab.tid))
+                        add(GeminiTab(tab.tid))
                     }
                 }
                 HomeEvent.ToggleIncognito -> incognito = !incognito

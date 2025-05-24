@@ -46,6 +46,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
+import androidx.navigation3.runtime.EntryProviderBuilder
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entry
 import ios.silv.gemclient.dependency.metroPresenter
 import ios.silv.gemclient.tab.DraggableNavLayout
 import ios.silv.gemclient.tab.NavLayoutAnchors.End
@@ -120,8 +123,8 @@ private val settingsItems = listOf(
     )
 )
 
-fun NavGraphBuilder.geminiSettingsDestination() {
-    composable<GeminiSettings> {
+fun EntryProviderBuilder<ios.silv.shared.NavKey>.geminiSettingsDestination() {
+    entry<GeminiSettings> {
 
         val presenter = metroPresenter<SettingsPresenter>()
 
