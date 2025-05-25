@@ -44,12 +44,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
-import androidx.navigation.NavGraphBuilder
-import androidx.navigation.compose.composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.EntryProviderBuilder
-import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entry
-import ios.silv.gemclient.dependency.metroPresenter
+import ios.silv.gemclient.dependency.metroViewModel
 import ios.silv.gemclient.tab.DraggableNavLayout
 import ios.silv.gemclient.tab.NavLayoutAnchors.End
 import ios.silv.gemclient.tab.NavLayoutAnchors.Start
@@ -66,7 +64,6 @@ import ios.silv.shared.settings.SettingsPresenter
 import ios.silv.shared.settings.SettingsState
 import ios.silv.shared.settings.Theme
 import ios.silv.shared.ui.EventFlow
-import ios.silv.shared.ui.rememberEventFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
@@ -126,10 +123,10 @@ private val settingsItems = listOf(
 fun EntryProviderBuilder<ios.silv.shared.NavKey>.geminiSettingsDestination() {
     entry<GeminiSettings> {
 
-        val presenter = metroPresenter<SettingsPresenter>()
+        val presenter = metroViewModel<SettingsPresenter>(it)
 
-        val events = rememberEventFlow<SettingsEvent>()
-        val state = presenter.present(events)
+        val events = presenter.events
+        val state by presenter.models.collectAsStateWithLifecycle()
 
         val scope = rememberCoroutineScope()
         val navDragState = rememberNavLayoutDraggableState()

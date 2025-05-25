@@ -1,39 +1,41 @@
 package ios.silv.shared.home
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.ViewModel
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.binding
 import ios.silv.database.dao.TabsDao
 import ios.silv.shared.AppComposeNavigator
 import ios.silv.shared.GeminiTab
-import ios.silv.shared.di.Presenter
-import ios.silv.shared.di.PresenterKey
-import ios.silv.shared.di.PresenterScope
+import ios.silv.shared.MoleculeViewModel
+import ios.silv.shared.di.ViewModelKey
+import ios.silv.shared.di.ViewModelScope
 import ios.silv.shared.settings.SettingsStore
 import ios.silv.shared.ui.EventEffect
 import ios.silv.shared.ui.EventFlow
-import ios.silv.shared.ui.collectAsRetainedState
-import ios.silv.shared.ui.rememberRetained
 
 
-@ContributesIntoMap(PresenterScope::class)
-@PresenterKey(HomePresenter::class)
+@ContributesIntoMap(ViewModelScope::class, binding<ViewModel>())
+@ViewModelKey(HomePresenter::class)
 @Inject
 class HomePresenter(
     private val tabsDao: TabsDao,
     private val navigator: AppComposeNavigator,
     private val settingsStore: SettingsStore,
-): Presenter {
+): MoleculeViewModel<HomeEvent, HomeUiState>() {
 
     @Composable
-    fun present(eventFlow: EventFlow<HomeEvent>): HomeUiState {
-        var incognito by rememberRetained { mutableStateOf(false) }
+    override fun models(eventFlow: EventFlow<HomeEvent>): HomeUiState {
+        var incognito by remember { mutableStateOf(false) }
 
-        val recentlyViewed by settingsStore.recentlyViewed.collectAsRetainedState()
-        val bookmarked by settingsStore.bookmarked.collectAsRetainedState()
+        val recentlyViewed by settingsStore.recentlyViewed.collectAsState()
+        val bookmarked by settingsStore.bookmarked.collectAsState()
 
         EventEffect(eventFlow) { event ->
             when (event) {

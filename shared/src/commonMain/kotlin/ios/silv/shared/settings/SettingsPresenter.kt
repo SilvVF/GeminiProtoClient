@@ -1,34 +1,36 @@
 package ios.silv.shared.settings
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.ViewModel
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.binding
 import ios.silv.shared.AppComposeNavigator
 import ios.silv.shared.GeminiHome
+import ios.silv.shared.MoleculeViewModel
 import ios.silv.shared.datastore.Keys
-import ios.silv.shared.di.Presenter
-import ios.silv.shared.di.PresenterKey
-import ios.silv.shared.di.PresenterScope
+import ios.silv.shared.di.ViewModelKey
+import ios.silv.shared.di.ViewModelScope
 import ios.silv.shared.toTopLevel
 import ios.silv.shared.ui.EventEffect
 import ios.silv.shared.ui.EventFlow
-import ios.silv.shared.ui.collectAsRetainedState
 
-@ContributesIntoMap(PresenterScope::class)
-@PresenterKey(SettingsPresenter::class)
+@ContributesIntoMap(ViewModelScope::class, binding = binding<ViewModel>())
+@ViewModelKey(SettingsPresenter::class)
 @Inject
 class SettingsPresenter(
     private val settingsStore: SettingsStore,
     private val navigator: AppComposeNavigator,
-) : Presenter {
+) : MoleculeViewModel<SettingsEvent, SettingsState>() {
 
     @Composable
-    fun present(events: EventFlow<SettingsEvent>): SettingsState {
+    override fun models(events: EventFlow<SettingsEvent>): SettingsState {
 
-        val incognito by settingsStore.incognito.collectAsRetainedState()
-        val theme by settingsStore.theme.collectAsRetainedState()
-        val appTheme by settingsStore.appTheme.collectAsRetainedState()
+        val incognito by settingsStore.incognito.collectAsState()
+        val theme by settingsStore.theme.collectAsState()
+        val appTheme by settingsStore.appTheme.collectAsState()
 
         EventEffect(events) { event ->
             when (event) {

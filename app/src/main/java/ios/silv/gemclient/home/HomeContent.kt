@@ -30,40 +30,34 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
-import androidx.navigation.NavGraphBuilder
-import androidx.navigation.compose.composable
-import androidx.navigation3.runtime.EntryProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.EntryProviderBuilder
-import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entry
-import androidx.navigation3.runtime.rememberSavedStateNavEntryDecorator
 import ios.silv.gemclient.BottomBarSinglePaneScene
-import ios.silv.shared.GeminiHome
-import ios.silv.shared.GeminiSettings
 import ios.silv.gemclient.base.LocalNavigator
-import ios.silv.gemclient.dependency.metroPresenter
+import ios.silv.gemclient.dependency.metroViewModel
 import ios.silv.gemclient.tab.DraggableNavLayout
 import ios.silv.gemclient.ui.components.TerminalSection
 import ios.silv.gemclient.ui.components.TerminalSectionButton
 import ios.silv.gemclient.ui.components.TerminalSectionDefaults
+import ios.silv.shared.GeminiHome
+import ios.silv.shared.GeminiSettings
 import ios.silv.shared.home.HomeEvent
 import ios.silv.shared.home.HomePresenter
 import ios.silv.shared.home.HomeUiState
 import ios.silv.shared.toTopLevel
 import ios.silv.shared.ui.EventFlow
-import ios.silv.shared.ui.rememberEventFlow
 
 fun EntryProviderBuilder<ios.silv.shared.NavKey>.geminiHomeDestination() {
     entry<GeminiHome>(
         metadata = mapOf(BottomBarSinglePaneScene.BOTTOM_BAR_KEY to true)
     ) {
-        val presenter = metroPresenter<HomePresenter>()
 
-        val eventsFlow = rememberEventFlow<HomeEvent>()
-        val state = presenter.present(eventsFlow)
+        val presenter = metroViewModel<HomePresenter>(it)
+        val state by presenter.models.collectAsStateWithLifecycle()
 
         GeminiHomeContent(
-            eventsFlow = eventsFlow,
+            eventsFlow = presenter.events,
             state = state,
         )
     }

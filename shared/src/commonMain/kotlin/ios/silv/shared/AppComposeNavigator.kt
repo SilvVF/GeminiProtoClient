@@ -13,9 +13,11 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onSubscription
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import kotlin.concurrent.atomics.AtomicBoolean

@@ -6,6 +6,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -16,11 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.entryProvider
@@ -38,9 +38,7 @@ import ios.silv.gemclient.bar.BottombarScaffold
 import ios.silv.gemclient.base.LocalNavBackStack
 import ios.silv.gemclient.base.LocalNavigator
 import ios.silv.gemclient.dependency.ActivityKey
-import ios.silv.gemclient.dependency.LocalMetroPresenterFactory
-import ios.silv.gemclient.dependency.PresenterFactory
-import ios.silv.gemclient.dependency.metroPresenter
+import ios.silv.gemclient.dependency.metroViewModel
 import ios.silv.gemclient.home.geminiHomeDestination
 import ios.silv.gemclient.settings.geminiSettingsDestination
 import ios.silv.gemclient.tab.geminiTabDestination
@@ -48,12 +46,9 @@ import ios.silv.gemclient.ui.theme.GemClientTheme
 import ios.silv.shared.AppComposeNavigator
 import ios.silv.shared.GeminiHome
 import ios.silv.shared.NavKey
-import ios.silv.shared.bar.BarEvent
 import ios.silv.shared.bar.BarPresenter
 import ios.silv.shared.settings.AppTheme
 import ios.silv.shared.settings.SettingsStore
-import ios.silv.shared.ui.rememberEventFlow
-import kotlinx.coroutines.launch
 
 
 @Suppress("UNCHECKED_CAST")
@@ -61,7 +56,6 @@ import kotlinx.coroutines.launch
 @ActivityKey(MainActivity::class)
 @Inject
 class MainActivity(
-    private val presenterFactory: PresenterFactory,
     private val navigator: AppComposeNavigator,
     private val settingsStore: SettingsStore,
 ) : ComponentActivity() {
@@ -77,7 +71,6 @@ class MainActivity(
 
         CompositionLocalProvider(
             LocalNavigator provides navigator,
-            LocalMetroPresenterFactory provides presenterFactory,
             LocalNavBackStack provides backstack,
         ) {
             content()
@@ -101,6 +94,7 @@ class MainActivity(
 
             val theme by settingsStore.theme.collectAsStateWithLifecycle()
             val appTheme by settingsStore.appTheme.collectAsStateWithLifecycle()
+            val owner = rememberViewModelStoreNavEntryDecorator()
 
             GeminiCompositionLocals(backStack as SnapshotStateList<NavKey>) {
                 GemClientTheme(
@@ -117,8 +111,14 @@ class MainActivity(
                                 rememberSceneSetupNavEntryDecorator(),
                                 rememberSavedStateNavEntryDecorator(),
                                 // Then add the view model store decorator
-                                rememberViewModelStoreNavEntryDecorator()
+                                owner
                             ),
+                            predictivePopTransitionSpec = {
+                                ContentTransform(
+                                    targetContentEnter = fadeIn(tween(700)),
+                                    initialContentExit = fadeOut(tween(700))
+                                )
+                            },
                             sceneStrategy = BottomBarSinglePaneSceneStrategy(),
                             entryProvider = entryProvider {
                                 geminiTabDestination()
@@ -136,18 +136,16 @@ class MainActivity(
 data class BottomBarSinglePaneScene<T : Any>(
     override val key: T,
     val entry: NavEntry<T>,
-    override val previousEntries: List<NavEntry<T>>,
+    override val previousEntries: List<NavEntry<T>>
 ) : Scene<T> {
     override val entries: List<NavEntry<T>> = listOf(entry)
     override val content: @Composable (() -> Unit) = {
         if (entry.metadata.containsKey(BOTTOM_BAR_KEY)) {
 
-            val events = rememberEventFlow<BarEvent>()
-            val presenter = metroPresenter<BarPresenter>()
+            val presenter = metroViewModel<BarPresenter>()
+            val state by presenter.models.collectAsStateWithLifecycle()
 
-            val state = presenter.present(events)
-
-            BottombarScaffold(state, events, Modifier.fillMaxSize()) {
+            BottombarScaffold(state, presenter.events, Modifier.fillMaxSize()) {
                 entry.content.invoke(entry.key)
             }
         } else {

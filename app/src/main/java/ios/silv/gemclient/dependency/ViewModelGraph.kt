@@ -20,6 +20,9 @@ import kotlin.reflect.KClass
 @DependencyGraph(ViewModelScope::class)
 interface ViewModelGraph {
 
+    @Provides
+    fun provideNavKey(navKey: ios.silv.shared.NavKey?): ios.silv.shared.NavKey = requireNotNull(navKey)
+
     @Multibinds
     val viewModelProviders: Map<KClass<out ViewModel>, Provider<ViewModel>>
 
@@ -37,7 +40,7 @@ interface ViewModelGraph {
         fun create(
             @Extends appGraph: AppGraph,
             @Provides creationExtras: CreationExtras,
-            @Provides navKey: ios.silv.shared.NavKey,
+            @Provides navKey: ios.silv.shared.NavKey?,
         ): ViewModelGraph
     }
 }

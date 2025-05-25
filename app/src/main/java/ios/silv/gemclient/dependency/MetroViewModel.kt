@@ -12,12 +12,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import dev.zacsweers.metro.createGraphFactory
 import ios.silv.gemclient.App
+import ios.silv.gemclient.base.LocalNavBackStack
 import kotlin.reflect.cast
 
 
 @Composable
 inline fun <reified VM : ViewModel> metroViewModel(
-    args: ios.silv.shared.NavKey,
+    args: ios.silv.shared.NavKey? = null,
     activity: Activity = checkNotNull(LocalActivity.current) {
         "no activity"
     },
@@ -33,10 +34,4 @@ inline fun <reified VM : ViewModel> metroViewModel(
 
     @Suppress("NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
     VM::class.cast(provider())
-}
-
-@Composable
-fun metroViewModelProviderFactory(): ViewModelProvider.Factory {
-    return (LocalActivity.current as HasDefaultViewModelProviderFactory)
-        .defaultViewModelProviderFactory
 }
