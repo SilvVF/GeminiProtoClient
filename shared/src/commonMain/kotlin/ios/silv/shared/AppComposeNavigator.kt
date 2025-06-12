@@ -8,6 +8,7 @@ import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import ios.silv.core.logcat.logcat
+import ios.silv.shared.types.SnapshotStateStack
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
@@ -24,23 +25,7 @@ import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.coroutines.coroutineContext
 
-typealias NavCmd = SnapshotStateList<NavKey>.() -> Unit
-
-inline fun <reified T> NavBackStackEntry.toRouteOrNull(): T? = try {
-    toRoute(T::class)
-} catch (e: SerializationException) {
-    null
-}
-
-fun toTopLevel(topLevelDest: TopLevelDest): NavCmd = {
-    // makes sure only one instance of this exists on the back stack
-    val i = indexOf(topLevelDest)
-    if (i == -1) {
-        add(topLevelDest)
-    } else {
-        add(removeAt(i))
-    }
-}
+typealias NavCmd = SnapshotStateStack<NavKey>.() -> Unit
 
 @SingleIn(AppScope::class)
 @Inject
@@ -48,9 +33,9 @@ class AppComposeNavigator {
 
     val navCmds = MutableSharedFlow<NavCmd>(extraBufferCapacity = Int.MAX_VALUE)
 
-    val navBackStackFlow = MutableStateFlow<SnapshotStateList<NavKey>?>(null)
+    val navBackStackFlow = MutableStateFlow<SnapshotStateStack<NavKey>?>(null)
 
-    suspend fun handleNavigationCommands(backStack: SnapshotStateList<NavKey>) {
+    suspend fun handleNavigationCommands(backStack: SnapshotStateStack<NavKey>) {
         navCmds
             .onSubscription { navBackStackFlow.value = backStack }
             .onCompletion { navBackStackFlow.value = null }
@@ -59,7 +44,7 @@ class AppComposeNavigator {
                 Snapshot.withMutableSnapshot {
                     backStack.apply(cmd)
                 }
-                logcat { "${backStack.toList()}" }
+                logcat { "$backStack" }
             }
     }
 }

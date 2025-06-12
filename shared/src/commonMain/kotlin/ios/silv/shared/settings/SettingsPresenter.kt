@@ -13,7 +13,6 @@ import ios.silv.shared.MoleculeViewModel
 import ios.silv.shared.datastore.Keys
 import ios.silv.shared.di.ViewModelKey
 import ios.silv.shared.di.ViewModelScope
-import ios.silv.shared.toTopLevel
 import ios.silv.shared.ui.EventEffect
 import ios.silv.shared.ui.EventFlow
 
@@ -46,7 +45,9 @@ class SettingsPresenter(
                     it[Keys.incognito] = !incognito
                 }
 
-                SettingsEvent.NavigateHome -> navigator.navCmds.tryEmit(toTopLevel(GeminiHome))
+                SettingsEvent.NavigateHome -> navigator.navCmds.tryEmit {
+                    replaceAll(GeminiHome)
+                }
             }
         }
 

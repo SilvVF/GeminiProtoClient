@@ -1,4 +1,8 @@
 package ios.silv.shared
 
-actual interface NavKey: androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+
+
+@Serializable
+actual sealed interface NavKey: androidx.navigation3.runtime.NavKey
 

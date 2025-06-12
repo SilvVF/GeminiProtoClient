@@ -3,7 +3,7 @@ targetSdk = "36"
 compileSdk = "36"
 minSdk = "28"
 
-agp = "8.10.0"
+agp = "8.10.1"
 kotlin = "2.1.21"
 coreKtx = "1.16.0"
 junit = "4.13.2"
@@ -18,21 +18,20 @@ activityCompose = "1.10.1"
 
 sqldelight = "2.0.2"
 
-kotlinxSerializationJson = "1.8.0"
+kotlinxSerializationJson = "1.8.1"
 
-nav3Core = "1.0.0-alpha01"
-nav3Lifecycle = "1.0.0-alpha01"
+nav3Core = "1.0.0-alpha02"
+lifecycleViewmodelNavigation3Android = "1.0.0-alpha01"
 
 ksp = "2.1.21-2.0.1"
 
-composeUi = "1.8.1"
-compose = "1.8.1"
-composeMultiplatform = "1.8.0"
+composeUi = "1.8.2"
+compose = "1.8.2"
+composeMultiplatform = "1.8.1"
 reorderable = "2.4.3"
 
-composeNav = "2.9.0"
-metro = "0.3.2"
-datastore = "1.1.6"
+metro = "0.3.4"
+datastore = "1.1.7"
 coil = "3.2.0"
 runner = "1.6.2"
 core = "1.6.1"
@@ -59,8 +58,6 @@ ktor-network-tls = { module = "io.ktor:ktor-network-tls", version.ref = "ktor" }
 sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
 sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
 
-compose-navigation = { module = "androidx.navigation:navigation-compose", version.ref = "composeNav" }
-
 compose-ui= { module = "androidx.compose.ui:ui", version.ref= "composeUi"}
 compose-ui-util= { module = "androidx.compose.ui:ui-util", version.ref= "composeUi"}
 compose-ui-text= { module = "androidx.compose.ui:ui-text", version.ref= "composeUi"}
@@ -70,7 +67,7 @@ compose-ui-tooling= { module = "androidx.compose.ui:ui-tooling", version.ref= "c
 
 androidx-navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "nav3Core" }
 androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", version.ref = "nav3Core" }
-androidx-lifecycle-viewmodel-navigation3 = { module = "androidx.lifecycle:lifecycle-viewmodel-navigation3", version.ref = "nav3Lifecycle" }
+androidx-lifecycle-viewmodel-navigation3-android = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-navigation3-android", version.ref = "lifecycleViewmodelNavigation3Android" }
 
 
 jetbrains-compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }

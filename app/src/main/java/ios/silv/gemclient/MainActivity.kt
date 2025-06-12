@@ -16,6 +16,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
@@ -49,9 +50,11 @@ import ios.silv.shared.NavKey
 import ios.silv.shared.bar.BarPresenter
 import ios.silv.shared.settings.AppTheme
 import ios.silv.shared.settings.SettingsStore
+import ios.silv.shared.types.SnapshotStateStack
+import ios.silv.shared.types.rememberStateStack
+import ios.silv.shared.types.toMutableStateStack
 
 
-@Suppress("UNCHECKED_CAST")
 @ContributesIntoMap(AppScope::class, binding<Activity>())
 @ActivityKey(MainActivity::class)
 @Inject
@@ -62,7 +65,7 @@ class MainActivity(
 
     @Composable
     private fun GeminiCompositionLocals(
-        backstack: SnapshotStateList<NavKey>,
+        backstack: SnapshotStateStack<NavKey>,
         content: @Composable () -> Unit
     ) {
         LaunchedEffect(backstack) {
@@ -77,7 +80,6 @@ class MainActivity(
         }
     }
 
-    @SuppressLint("RestrictedApi")
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -90,13 +92,13 @@ class MainActivity(
 
         setContent {
 
-            val backStack = rememberNavBackStack(GeminiHome)
+            val backStack = rememberStateStack<NavKey>(GeminiHome)
 
             val theme by settingsStore.theme.collectAsStateWithLifecycle()
             val appTheme by settingsStore.appTheme.collectAsStateWithLifecycle()
-            val owner = rememberViewModelStoreNavEntryDecorator()
 
-            GeminiCompositionLocals(backStack as SnapshotStateList<NavKey>) {
+            @Suppress("UNCHECKED_CAST")
+            GeminiCompositionLocals(backStack) {
                 GemClientTheme(
                     theme = theme,
                     dynamicColor = appTheme == AppTheme.Dynamic,
@@ -105,13 +107,13 @@ class MainActivity(
                         color = MaterialTheme.colorScheme.background
                     ) {
                         NavDisplay(
-                            backStack = backStack,
+                            backStack = backStack.items,
                             entryDecorators = listOf(
                                 // Add the default decorators for managing scenes and saving state
                                 rememberSceneSetupNavEntryDecorator(),
                                 rememberSavedStateNavEntryDecorator(),
                                 // Then add the view model store decorator
-                                owner
+                                rememberViewModelStoreNavEntryDecorator()
                             ),
                             predictivePopTransitionSpec = {
                                 ContentTransform(

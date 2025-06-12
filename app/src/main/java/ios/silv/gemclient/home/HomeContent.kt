@@ -45,7 +45,6 @@ import ios.silv.shared.GeminiSettings
 import ios.silv.shared.home.HomeEvent
 import ios.silv.shared.home.HomePresenter
 import ios.silv.shared.home.HomeUiState
-import ios.silv.shared.toTopLevel
 import ios.silv.shared.ui.EventFlow
 
 fun EntryProviderBuilder<ios.silv.shared.NavKey>.geminiHomeDestination() {
@@ -201,7 +200,9 @@ private fun HomeTopAppBar(
                     TerminalSectionDefaults.Label("settings", color = containerColor)
                 },
                 onClick = {
-                    navigator.navCmds.tryEmit(toTopLevel(GeminiSettings))
+                    navigator.navCmds.tryEmit {
+                        replaceAll(GeminiSettings)
+                    }
                 }
             ) {
                 Icon(

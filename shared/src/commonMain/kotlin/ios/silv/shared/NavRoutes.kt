@@ -2,7 +2,8 @@ package ios.silv.shared
 
 import kotlinx.serialization.Serializable
 
-expect interface NavKey
+@Serializable
+expect sealed interface NavKey
 
 sealed interface TopLevelDest: NavKey
 

@@ -53,10 +53,10 @@ class PageViewModel(
     private val tabsDao: TabsDao,
     private val navigator: AppComposeNavigator,
     private val settingsStore: SettingsStore,
-    key: GeminiTab,
+    navKey: NavKey,
 ) : MoleculeViewModel<PageEvent, PageState>() {
 
-    val tab = key
+    val tab = navKey as GeminiTab
 
     private val tabStateFlow = tabsDao.observeTabWithActivePage(tab.id)
         .map { it ?: (null to null) }
@@ -194,7 +194,7 @@ class PageViewModel(
                         tabsDao.deleteTab(tab.id)
 
                         navigator.navCmds.tryEmit {
-                            remove(tab)
+                            replaceAll(items.filterNot { it == tab })
                         }
                     }
                 }
@@ -203,7 +203,7 @@ class PageViewModel(
                 is PageEvent.CreateTab -> {
                     val newTab = tabsDao.insertTab(event.link)
                     navigator.navCmds.tryEmit {
-                        add(GeminiTab(id = newTab.tid))
+                        push(GeminiTab(id = newTab.tid))
                     }
                 }
             }
@@ -214,7 +214,7 @@ class PageViewModel(
 
                 LaunchedEffect(Unit) {
                     navigator.navCmds.tryEmit {
-                        remove(tab)
+                        replaceAll(items.filterNot { it == tab })
                     }
                 }
 

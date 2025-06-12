@@ -23,11 +23,9 @@ import ios.silv.shared.AppComposeNavigator
 import ios.silv.shared.GeminiHome
 import ios.silv.shared.GeminiTab
 import ios.silv.shared.MoleculeViewModel
-import ios.silv.shared.NavKey
 import ios.silv.shared.PreviewCache
 import ios.silv.shared.di.ViewModelKey
 import ios.silv.shared.di.ViewModelScope
-import ios.silv.shared.toTopLevel
 import ios.silv.shared.types.StablePage
 import ios.silv.shared.types.StableTab
 import ios.silv.shared.ui.EventEffect
@@ -79,14 +77,10 @@ class BarPresenter(
         val orderedTabs = remember {
             mutableStateListOf<Triple<StableTab, StablePage?, String?>>()
         }
-
-        val navBackStackEntry by remember {
-            derivedStateOf { backstack?.lastOrNull() }
-        }
         val tabs by tabsWithActivePageFlow.collectAsState(emptyList())
 
         val visibleTab by produceState<GeminiTab?>(null) {
-            snapshotFlow { navBackStackEntry }.filterNotNull()
+            snapshotFlow { backstack?.lastItemOrNull }.filterNotNull()
                 .map { it as? GeminiTab }
                 .onEach { value = it }
                 .filterNotNull()
@@ -123,7 +117,7 @@ class BarPresenter(
                     val tab = tabsDao.insertTab(null)
 
                     navigator.navCmds.tryEmit {
-                        add(GeminiTab(tab.tid))
+                        push(GeminiTab(tab.tid))
                     }
                 }
 
@@ -135,7 +129,7 @@ class BarPresenter(
                     val tab = tabsDao.insertTab(query)
 
                     navigator.navCmds.tryEmit {
-                        add(GeminiTab(tab.tid))
+                        push(GeminiTab(tab.tid))
                     }
                 }
 
@@ -144,7 +138,7 @@ class BarPresenter(
                 }
 
                 is BarEvent.GoToTab -> {
-                    navigator.navCmds.tryEmit { add(GeminiTab(id = event.tab.id)) }
+                    navigator.navCmds.tryEmit { push(GeminiTab(id = event.tab.id)) }
                 }
 
                 is BarEvent.ReorderTabs -> {
@@ -156,7 +150,9 @@ class BarPresenter(
 
                 is BarEvent.SearchChanged -> query = event.query
                 BarEvent.GoToHome -> {
-                    navigator.navCmds.tryEmit(toTopLevel(GeminiHome))
+                    navigator.navCmds.tryEmit {
+                        replaceAll(GeminiHome)
+                    }
                 }
             }
         }

@@ -1,6 +1,9 @@
 package ios.silv.shared
 
+import kotlinx.serialization.Serializable
 
-actual interface NavKey
+
+@Serializable
+actual sealed interface NavKey
 
 
