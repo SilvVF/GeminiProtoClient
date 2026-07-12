@@ -1,0 +1,116 @@
+package ios.silv.libgemini.gemini
+
+import io.ktor.http.ContentType
+import io.ktor.utils.io.CancellationException
+import io.ktor.utils.io.charsets.Charsets
+import io.ktor.utils.io.core.readText
+import ios.silv.logcat.logcat
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.io.readByteArray
+
+object GeminiParser {
+
+    fun parse(query: String, res: Response): Flow<ContentNode> {
+        return try {
+            if (res.status != GeminiCode.SUCCESS) {
+                flowOf(
+                    ContentNode.Error(
+                        status = res.status,
+                        statusText = GeminiCode.statusText(res.status).orEmpty(),
+                        message = res.body.readText(Charsets.UTF_8)
+                    )
+                )
+            } else {
+                handleSuccess(query, res)
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+
+            flowOf(
+                ContentNode.InternalError(e.message.orEmpty())
+            )
+        }
+    }
+
+    private fun handleSuccess(query: String, res: Response): Flow<ContentNode> {
+        res.body.peek().use { src ->
+            val contentType = ContentType.parse(res.meta)
+            logcat { "$contentType" }
+            return when (contentType.contentType) {
+                "text" -> parseText(query, src.readText(Charsets.UTF_8))
+                "image" -> flowOf(
+                    ContentNode.Image(
+                        type = res.meta,
+                        raw = src.readByteArray()
+                    )
+                )
+                else -> flowOf(ContentNode.Other(contentType.toString(), src.readByteArray()))
+            }
+        }
+    }
+}
+
+// #...[<whitespace>]<heading>
+private val headingRegex = Regex("#+\\s+.*")
+
+internal expect fun resolveUrl(baseUrl: String, url: String): String
+
+internal expect fun isRelativeUrl(url: String): Boolean
+
+private const val LINK_PREFIX = "=>"
+private const val LIST_PREFIX = "* "
+private const val QUOTE_PREFIX = ">"
+private const val PREFORMAT_PREFIX = "```"
+
+private fun parseText(query: String, body: String) = flow {
+    for (block in body.split("\n", "\r\n").filter { it.isNotBlank() }) {
+        val node = when {
+            block.matches(headingRegex) -> ContentNode.Line.Heading(
+                level = block.takeWhile { c -> c == '#' }.length,
+                text = block,
+                heading = run {
+                    val whiteSpace = block.indexOf(' ')
+                    if (block.lastIndex == whiteSpace) {
+                        ""
+                    } else {
+                        block.slice(whiteSpace + 1..block.lastIndex)
+                    }
+                }
+            )
+
+            block.startsWith(LINK_PREFIX) -> {
+                val split =
+                    block.removePrefix(LINK_PREFIX).trimStart().split(Regex("\\s+"), limit = 2)
+                ContentNode.Line.Link(
+                    text = block,
+                    url = if (isRelativeUrl(split[0])) {
+                        resolveUrl(query, split[0].trim())
+                    } else {
+                        split[0].trim()
+                    },
+                    name = split.getOrNull(1) ?: split[0]
+                )
+            }
+
+            block.startsWith(LIST_PREFIX) -> ContentNode.Line.List(
+                block,
+                block.drop(LIST_PREFIX.length)
+            )
+
+            block.startsWith(QUOTE_PREFIX) -> ContentNode.Line.Quote(
+                block,
+                block.drop(QUOTE_PREFIX.length)
+            )
+
+            block.startsWith(PREFORMAT_PREFIX) -> ContentNode.Line.Preformat(
+                block,
+                block.drop(PREFORMAT_PREFIX.length)
+            )
+
+            else -> ContentNode.Line.Text(block)
+        }
+        emit(node)
+    }
+}

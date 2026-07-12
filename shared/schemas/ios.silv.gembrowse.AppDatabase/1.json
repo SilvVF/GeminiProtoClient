@@ -1,0 +1,121 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "48ed841669ca7ae6ca3675ac8007d4c9",
+    "entities": [
+      {
+        "tableName": "page",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `tabId` INTEGER NOT NULL, `url` TEXT NOT NULL, `prevPageId` INTEGER, FOREIGN KEY(`prevPageId`) REFERENCES `page`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`tabId`) REFERENCES `tab`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tabId",
+            "columnName": "tabId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "prevPageId",
+            "columnName": "prevPageId",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_page_tabId",
+            "unique": false,
+            "columnNames": [
+              "tabId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_page_tabId` ON `${TABLE_NAME}` (`tabId`)"
+          },
+          {
+            "name": "index_page_prevPageId",
+            "unique": false,
+            "columnNames": [
+              "prevPageId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_page_prevPageId` ON `${TABLE_NAME}` (`prevPageId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "page",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "prevPageId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "tab",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "tabId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "tab",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `activePageId` INTEGER, `prevImageUpdatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activePageId",
+            "columnName": "activePageId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "prevImageUpdatedAt",
+            "columnName": "prevImageUpdatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '48ed841669ca7ae6ca3675ac8007d4c9')"
+    ]
+  }
+}
