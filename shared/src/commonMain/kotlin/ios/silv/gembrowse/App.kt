@@ -2,6 +2,7 @@ package ios.silv.gembrowse
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
@@ -30,6 +31,7 @@ import coil3.compose.setSingletonImageLoaderFactory
 import coil3.request.crossfade
 import kotlinx.coroutines.CoroutineScope
 
+@ExperimentalMaterial3Api
 @Composable
 @Preview
 fun App() {

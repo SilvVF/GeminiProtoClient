@@ -37,6 +37,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -48,14 +49,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Measurable
@@ -91,7 +90,16 @@ import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
-val MutedAlpha =  0.78f
+const val MutedAlpha =  0.78f
+
+interface ErrorHandler {
+    fun onError(error: Throwable)
+}
+val LocalErrorHandler = compositionLocalOf<ErrorHandler> {
+    object : ErrorHandler {
+        override fun onError(error: Throwable) = logcat { error.asLog() }
+    }
+}
 
 @Composable
 fun LazyListState.sampleScrollingState(sample: Duration = 800.milliseconds): State<Boolean> {
@@ -131,12 +139,13 @@ fun <EVENT> EventEffect(
     eventFlow: EventFlow<EVENT>,
     block: suspend CoroutineScope.(EVENT) -> Unit,
 ) {
+    val errorHandler = LocalErrorHandler.current
     LaunchedEffect(eventFlow) {
         eventFlow.collect { event ->
-            launch {
+            this@LaunchedEffect.launch {
                 suspendRunCatching { block(event) }
                     .onFailure {
-                        logcat { it.asLog() }
+                        errorHandler.onError(it)
                     }
             }
         }

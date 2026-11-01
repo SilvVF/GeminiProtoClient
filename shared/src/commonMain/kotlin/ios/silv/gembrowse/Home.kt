@@ -210,6 +210,7 @@ private fun TerminalItemsBlock(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeTopAppBar(
     containerColor: Color,

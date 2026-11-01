@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -155,6 +156,7 @@ private val settingsItems = listOf(
     )
 )
 
+@ExperimentalMaterial3Api
 @Composable
 fun SettingsContent(
     state: SettingsState,
