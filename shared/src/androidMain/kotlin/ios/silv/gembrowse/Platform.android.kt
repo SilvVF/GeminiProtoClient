@@ -9,7 +9,6 @@ import androidx.room3.Room
 import androidx.room3.RoomDatabase
 import ios.silv.libgemini.gemini.AndroidGeminiClient
 import ios.silv.libgemini.gemini.GeminiClient
-import ios.silv.logcat.AndroidLogcatLogger
 
 class AndroidPlatform : Platform {
     override val name: String = "Android ${Build.VERSION.SDK_INT}"

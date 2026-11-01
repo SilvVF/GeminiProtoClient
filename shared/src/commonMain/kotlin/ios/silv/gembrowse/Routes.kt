@@ -20,7 +20,6 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.serializer
 
-
 @Serializable
 sealed interface Route : NavKey
 
@@ -32,7 +31,6 @@ data object HomeRoute : Route
 
 @Serializable
 data class TabRoute(val id: Int) : Route
-
 
 @Composable
 inline fun <reified Item : Any> rememberStateStack(

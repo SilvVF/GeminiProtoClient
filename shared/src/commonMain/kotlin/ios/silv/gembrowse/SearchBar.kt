@@ -56,6 +56,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Surface
@@ -265,7 +266,8 @@ fun BottombarScaffold(
     val barMode = rememberSaveable(
         saver = Saver(
             save = { it.currentState.ordinal },
-        restore = { MutableTransitionState(BarMode.entries[it]) })) {
+            restore = { MutableTransitionState(BarMode.entries[it]) })
+    ) {
         MutableTransitionState(
             BarMode.NONE
         )
@@ -505,20 +507,20 @@ private fun LazyGridItemScope.TabPreviewItem(
                     onClick = { onSelected() },
                     shape = RectangleShape,
                     modifier = Modifier.graphicsLayer {
-                            alpha = EaseInOutSine.transform(swipeToDismissState.actualProgress)
-                        }.longPressDraggableHandle(
-                            interactionSource = interactionSource,
-                            onDragStarted = {
-                                haptic.performHapticFeedback(
-                                    HapticFeedbackType.GestureThresholdActivate
-                                )
-                            },
-                            onDragStopped = {
-                                haptic.performHapticFeedback(
-                                    HapticFeedbackType.GestureEnd
-                                )
-                            },
-                        ).fillMaxWidth().height(220.dp).padding(2.dp),
+                        alpha = EaseInOutSine.transform(swipeToDismissState.actualProgress)
+                    }.longPressDraggableHandle(
+                        interactionSource = interactionSource,
+                        onDragStarted = {
+                            haptic.performHapticFeedback(
+                                HapticFeedbackType.GestureThresholdActivate
+                            )
+                        },
+                        onDragStopped = {
+                            haptic.performHapticFeedback(
+                                HapticFeedbackType.GestureEnd
+                            )
+                        },
+                    ).fillMaxWidth().height(220.dp).padding(2.dp),
                     colors = colors
                 ) {
                     Row(
@@ -619,7 +621,9 @@ fun RowScope.BottomBarContent(
         }
     }
     OutlinedTextField(
-        modifier = Modifier.weight(1f).focusRequester(focusRequester)
+        modifier = Modifier
+            .weight(1f)
+            .focusRequester(focusRequester)
             .onFocusChanged(onFocusChanged),
         value = searchText,
         keyboardOptions = KeyboardOptions(
@@ -637,15 +641,13 @@ fun RowScope.BottomBarContent(
             onDone = {
                 onSearch(searchText)
             }),
-        colors = TextFieldDefaults.colors(
+        colors = OutlinedTextFieldDefaults.colors(
             unfocusedContainerColor = Color.Transparent,
             focusedContainerColor = Color.Transparent,
             errorContainerColor = Color.Transparent,
             disabledContainerColor = Color.Transparent,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            errorIndicatorColor = Color.Transparent,
-        ))
+        )
+    )
     barModeTransition.AnimatedVisibility(
         visible = { it != BarMode.SEARCHING }) {
         Row(
@@ -657,7 +659,8 @@ fun RowScope.BottomBarContent(
                     .border(
                         2.dp, MaterialTheme.colorScheme.onSurface, RectangleShape
                     ).clickable { toggleEditing() }.aspectRatio(1.2f / 1f).padding(Dp.Hairline),
-                contentAlignment = Alignment.Center) {
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
                     "$tabsCount",
                     style = MaterialTheme.typography.labelLarge,

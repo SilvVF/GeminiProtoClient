@@ -13,12 +13,10 @@ import io.ktor.network.sockets.openReadChannel
 import io.ktor.network.sockets.openWriteChannel
 import io.ktor.network.tls.TLSConfigBuilder
 import io.ktor.network.tls.tls
-import io.ktor.utils.io.core.Closeable
 import io.ktor.utils.io.core.readAvailable
-import io.ktor.utils.io.core.remaining
+import io.ktor.utils.io.readBuffer
 import io.ktor.utils.io.readRemaining
 import io.ktor.utils.io.writeString
-import ios.silv.logcat.LogPriority
 import ios.silv.logcat.LogPriority.ERROR
 import ios.silv.logcat.logcat
 import kotlinx.coroutines.CoroutineName
@@ -29,16 +27,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.io.Buffer
 import kotlinx.io.IOException
 import kotlinx.io.Source
-import kotlinx.io.buffered
-import kotlinx.io.files.FileSystem
-import kotlinx.io.files.Path
-import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.readLineStrict
-import kotlin.contracts.ExperimentalContracts
-import kotlin.contracts.InvocationKind
-import kotlin.contracts.contract
+import okio.buffer
+import okio.use
 import kotlin.coroutines.CoroutineContext
-import kotlin.use
 
 internal const val URLMaxLength = 1024
 internal const val MetaMaxLength = 1024
@@ -62,11 +54,7 @@ internal data class Header(
     val meta: String,
 )
 
-@Throws(IOException::class)
-internal fun consumeHeader(source: Source): Result<Header> = runCatching {
-    val line =  source.readLineStrict(4096)
-
-
+private fun consumeHeaderInternal(line: String): Header {
     val fields = line.split(" ")
     if (fields.size < 2) {
         error("Header not formatted correctly")
@@ -79,7 +67,19 @@ internal fun consumeHeader(source: Source): Result<Header> = runCatching {
         error("Meta string is too long")
     }
 
-    Header(status, meta)
+    return Header(status, meta)
+}
+
+@Throws(IOException::class)
+internal fun consumeHeaderOkio(source: okio.BufferedSource): Result<Header> = runCatching {
+    val line = source.readUtf8LineStrict(4096)
+    consumeHeaderInternal(line)
+}
+
+@Throws(IOException::class)
+internal fun consumeHeader(source: Source): Result<Header> = runCatching {
+    val line = source.readLineStrict(4096)
+    consumeHeaderInternal(line)
 }
 
 data class ClientConfig(
@@ -91,16 +91,19 @@ data class ClientConfig(
     val maxRedirects: Int = 5
 )
 
-internal expect fun TLSConfigBuilder.applyPlatformTofuConfig(url: Url, store: DataStore<Preferences>)
+internal expect fun TLSConfigBuilder.applyPlatformTofuConfig(
+    url: Url,
+    store: DataStore<Preferences>
+)
 
 class GeminiClient(
     private val cache: IGeminiCache,
     private val config: ClientConfig = ClientConfig(),
+    private val fileSystem: okio.FileSystem,
     storage: Storage<Preferences>
 ) {
 
     private val store: DataStore<Preferences> = createDataStore(storage)
-    private val fileSystem: FileSystem = SystemFileSystem
     private val selector = config.selector
 
     suspend fun makeGeminiQuery(
@@ -119,13 +122,15 @@ class GeminiClient(
     }
 
     private suspend fun readResponseFromCache(
-        path: Path,
+        path: okio.Path,
         redirected: Int,
         cacheEnabled: Boolean
     ): Result<Response> {
         return suspendRunCatching {
-            fileSystem.source(path).buffered().use { source ->
-                val header = consumeHeader(source).getOrThrow()
+            logcat { path.toString() }
+            fileSystem.source(path).buffer().use { source ->
+
+                val header = consumeHeaderOkio(source).getOrThrow()
 
                 if (header.status == GeminiCode.REDIRECT_PERMANENT) {
                     return@suspendRunCatching fetch(
@@ -137,14 +142,19 @@ class GeminiClient(
                         .getOrThrow()
                 }
 
-                if (source.remaining <= 0L) {
+                if (source.exhausted()) {
                     error("empty buffer")
                 }
 
-                val buffer = Buffer().apply {
-                    source.transferTo(this)
-                }
+                val buffer = Buffer()
+                val chunk = ByteArray(8192)
 
+                while (true) {
+                    val read = source.read(chunk, 0, chunk.size)
+                    if (read == -1) break
+
+                    buffer.write(chunk, 0, read)
+                }
                 Response(
                     status = header.status,
                     meta = header.meta,
@@ -173,22 +183,6 @@ class GeminiClient(
         redirected: Int
     ): Result<Response> {
         return suspendRunCatching {
-
-            if (!forceNetwork) {
-                cache.getResponse(url.toString())?.let { cached ->
-                    logcat { "Found entry in cache for $url" }
-                    readResponseFromCache(cached, redirected, cacheEnabled)
-                        .onSuccess { response ->
-                            logcat { "successfully read from cache fro $url" }
-                            return@suspendRunCatching response
-                        }
-                        .onFailure {
-                            cache.deleteResponse("$url")
-                            logcat(ERROR) { "failed to parse cache entry for $url ${it.message}" }
-                        }
-                }
-            }
-
             val urlBuilder = URLBuilder(url)
             val urlLength = url.toString().length
 
@@ -208,8 +202,23 @@ class GeminiClient(
 
             val url = urlBuilder.build()
 
-            logcat { "Trying to connect to ${url.host}:${url.port} - $url" }
+            if (!forceNetwork) {
+                logcat { "looking in cache for $url" }
+                cache.getResponse(url.toString())?.let { cached ->
+                    logcat { "Found entry in cache for $url" }
+                    readResponseFromCache(cached, redirected, cacheEnabled)
+                        .onSuccess { response ->
+                            logcat { "successfully read from cache from $url" }
+                            return@suspendRunCatching response
+                        }
+                        .onFailure {
+                            cache.deleteResponse("$url")
+                            logcat(ERROR) { "failed to parse cache entry for $url ${it.message}" }
+                        }
+                } ?: logcat { "unable to find response in cache" }
+            }
 
+            logcat { "Trying to connect to ${url.host}:${url.port} - $url" }
 
             openNewConnection(url).use { conn ->
                 val writeChannel = conn.openWriteChannel(true)
@@ -219,7 +228,7 @@ class GeminiClient(
 
                 val buffer = Buffer()
 
-                readChannel.readRemaining().use {
+                readChannel.readBuffer().use {
                     it.readAvailable(buffer)
                 }
                 val header = consumeHeader(buffer).getOrThrow()
@@ -238,6 +247,7 @@ class GeminiClient(
 
                     else -> {
                         if (header.status == GeminiCode.SUCCESS) {
+                            logcat { "writing response to cache url: $url header: $header" }
                             cache.cacheResponse(
                                 url = url.toString(),
                                 header = "${header.status} ${header.meta}\r\n",

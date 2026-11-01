@@ -144,8 +144,15 @@ interface TabDao {
         updatedAt: Long = Clock.System.now().epochSeconds
     )
 
-    @Query("INSERT INTO tab(id, activePageId, prevImageUpdatedAt) VALUES (NULL, :activePageId, :prevImageUpdatedAt) ON CONFLICT(id) DO UPDATE SET activePageId = :activePageId")
-    suspend fun insertTab(activePageId: Int?, prevImageUpdatedAt: Long = -1): Long
+    @Query("""
+    INSERT INTO tab(id, activePageId, prevImageUpdatedAt)
+    VALUES (NULL, :activePageId, :prevImageUpdatedAt)
+    ON CONFLICT(id) DO UPDATE SET activePageId = excluded.activePageId
+    """)
+    suspend fun insertTab(
+        activePageId: Int?,
+        prevImageUpdatedAt: Long = -1
+    ): Long
 
     @Query("SELECT id FROM tab")
     suspend fun selectTabIds(): List<Int>

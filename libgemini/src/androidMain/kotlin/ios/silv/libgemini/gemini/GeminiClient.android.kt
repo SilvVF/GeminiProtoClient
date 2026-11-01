@@ -15,6 +15,8 @@ import ios.silv.logcat.logcat
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
+import okio.FileSystem
+import okio.Path.Companion.toOkioPath
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.cert.CertificateException
@@ -24,7 +26,8 @@ import javax.net.ssl.X509TrustManager
 import kotlin.time.ExperimentalTime
 
 fun AndroidGeminiClient(context: Context) = GeminiClient(
-    cache = GeminiCache(context),
+    fileSystem = FileSystem.SYSTEM,
+    cache = GeminiCache(context.cacheDir.toOkioPath(), fileSystem = FileSystem.SYSTEM),
     storage = FileStorage(
         serializer = PreferencesFileSerializer,
         produceFile = { context.filesDir.resolve(dataStoreFileName) }
@@ -38,7 +41,6 @@ private fun X509Certificate.sha256PublicKeyFingerprint(): String {
 }
 
 @SuppressLint("CustomX509TrustManager")
-@OptIn(ExperimentalTime::class)
 private fun createTofuTrustManager(
     store: DataStore<Preferences>,
     host: String,
