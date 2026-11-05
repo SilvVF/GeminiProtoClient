@@ -1,0 +1,700 @@
+package ios.silv.libgemini.gemini
+
+import com.ditchoom.buffer.flow.ByteSinkStalledException
+import kotlin.time.Duration
+import kotlin.time.Instant
+
+/**
+ * Sealed hierarchy for all socket errors.
+ *
+ * On JVM/Android, extends `java.io.IOException` via [PlatformIOException] so that
+ * `catch (e: IOException)` catches socket errors (matching Java's convention).
+ *
+ * ```
+ * sealed SocketException : PlatformIOException (IOException on JVM, Exception elsewhere)
+ * ├── SocketClosedException              — connection is gone
+ * │   ├── ConnectionResetException       — peer sent RST (ECONNRESET)
+ * │   ├── BrokenPipeException            — wrote to closed peer (EPIPE)
+ * │   └── EndOfStreamException           — clean EOF (bytesRead ≤ 0)
+ * ├── SocketConnectionException          — failed to establish connection   (ConnectionFailure)
+ * │   ├── Refused                        — ECONNREFUSED
+ * │   ├── NetworkUnreachable             — ENETUNREACH
+ * │   ├── HostUnreachable                — EHOSTUNREACH
+ * │   └── Other(reason)                  — any other typed reason (e.g. OutOfMemory)
+ * ├── SocketUnknownHostException         — DNS resolution failed            (ConnectionFailure)
+ * ├── SocketTimeoutException             — connect / read / write timeout   (ConnectionFailure)
+ * ├── SocketIOException                  — generic I/O error (catch-all)
+ * ├── SocketWriteStalledException        — sink reported no progress with bytes pending
+ * └── sealed SSLSocketException          — TLS/SSL errors                   (ConnectionFailure)
+ *     ├── SSLHandshakeFailedException    — certificate / handshake failure
+ *     └── SSLProtocolException           — other TLS protocol errors
+ * ```
+ *
+ * Establishment/handshake failures additionally implement [ConnectionFailure], exposing an exhaustive,
+ * platform-neutral [ConnectionFailureReason] (`reason`) as the portable discriminator.
+ */
+
+/**
+ * The exhaustive, transport- and platform-neutral *cause* of a connection-establishment or I/O
+ * failure — the structured discriminator; the free-form `platformError: String` is diagnostic detail
+ * only.
+ *
+ * The same underlying condition (connection refused, untrusted certificate, out of memory during the
+ * handshake, …) surfaces as a **different native string per platform** — JSSE messages on JVM, POSIX
+ * errno text on Linux K/N, Network.framework / `Sec` codes on Apple, JS error `code`s on Node. Making
+ * that string the thing callers switch on makes exhaustive, portable error handling impossible.
+ *
+ * Every platform mapper produces one of these instead. It mirrors the [com.ditchoom.socket.quic.QuicError]
+ * gold standard: a sealed hierarchy that a `when` discriminates exhaustively, with the raw platform
+ * string demoted to non-discriminating diagnostic detail (the exception `message`/`cause`), never the
+ * value callers branch on.
+ *
+ * Attached to the establishment exceptions via the [ConnectionFailure] interface — implemented by
+ * [SocketConnectionException], [SocketUnknownHostException], [SocketTimeoutException] and
+ * [SSLSocketException] — so `catch (e: SocketException) { (e as? ConnectionFailure)?.reason?.let { … } }`
+ * is exhaustive and identical on every platform.
+ *
+ * Scope: this models *connect/handshake* failures. Post-establishment connection-loss is already an
+ * exhaustive typed surface — the [SocketClosedException] subtypes (`ConnectionReset`, `BrokenPipe`,
+ * `EndOfStream`, `General`) — so those conditions are deliberately **not** duplicated here.
+ */
+sealed interface ConnectionFailureReason {
+    /** Human-readable one-line summary — for log/exception messages. The sealed value is the API. */
+    val description: String
+
+    /** The remote peer actively refused the connection (ECONNREFUSED / equivalent). */
+    data object Refused : ConnectionFailureReason {
+        override val description get() = "Connection refused by peer"
+    }
+
+    /** No route to the destination host (EHOSTUNREACH / equivalent). */
+    data object HostUnreachable : ConnectionFailureReason {
+        override val description get() = "No route to host"
+    }
+
+    /** No route to the destination network (ENETUNREACH / equivalent). */
+    data object NetworkUnreachable : ConnectionFailureReason {
+        override val description get() = "Network is unreachable"
+    }
+
+    /**
+     * The user's settings withhold [access] from this app, so there is no path until they change it —
+     * Apple's Local Network privacy grant, or cellular or Wi-Fi data turned off for the app. Retrying
+     * cannot help; tell the user which switch to turn.
+     */
+    data class AccessDenied(
+        val access: NetworkAccess,
+    ) : ConnectionFailureReason {
+        override val description get() = access.description
+    }
+
+    /** DNS resolution failed for the hostname (EAI_NONAME / UnknownHostException / equivalent). */
+    data object UnknownHost : ConnectionFailureReason {
+        override val description get() = "Hostname could not be resolved"
+    }
+
+    /** The connect / read / write deadline elapsed (ETIMEDOUT / SocketTimeout / equivalent). */
+    data object Timeout : ConnectionFailureReason {
+        override val description get() = "Operation timed out"
+    }
+
+    /** The peer's certificate failed validation — untrusted, expired, name-mismatch, etc. */
+    data object TlsBadCertificate : ConnectionFailureReason {
+        override val description get() = "Peer certificate validation failed"
+    }
+
+    /** A TLS handshake failure that is not specifically a certificate rejection. */
+    data object TlsHandshake : ConnectionFailureReason {
+        override val description get() = "TLS handshake failed"
+    }
+
+    /** Attempted TLS against a plaintext peer (or vice versa) — protocol/record mismatch. */
+    data object TlsProtocolMismatch : ConnectionFailureReason {
+        override val description get() = "TLS protocol mismatch (plaintext peer or record error)"
+    }
+
+    /** The platform could not allocate memory to establish the connection (ENOMEM / equivalent). */
+    data object OutOfMemory : ConnectionFailureReason {
+        override val description get() = "Out of memory establishing connection"
+    }
+
+    /**
+     * A condition this library does not (yet) classify. Preserves the [raw] platform string as
+     * **diagnostic detail only** — do not branch on it; it varies per platform and per version. If a
+     * new condition needs portable handling, promote it to its own case above and map it in every
+     * platform mapper.
+     */
+    data class Unknown(
+        val raw: String,
+    ) : ConnectionFailureReason {
+        override val description get() = "Unclassified connection failure: $raw"
+    }
+}
+
+/** A kind of network access a user can withhold from one app in the system's settings. */
+enum class NetworkAccess(
+    val description: String,
+) {
+    /** Reaching devices on the local network: Apple's Local Network privacy grant. */
+    LocalNetwork("This app is not allowed to reach the local network"),
+
+    /** Cellular data for this app. */
+    CellularData("Cellular data is turned off for this app"),
+
+    /** Wi-Fi for this app. */
+    WifiData("Wi-Fi is turned off for this app"),
+}
+
+/**
+ * Implemented by the establishment/handshake exceptions that carry a structured
+ * [ConnectionFailureReason]. Lets a caller recover the portable cause off the catch-all
+ * [SocketException] without knowing the concrete subtype:
+ *
+ * ```kotlin
+ * try {
+ *     transport.connect(host, port, config)
+ * } catch (e: SocketException) {
+ *     when ((e as? ConnectionFailure)?.reason) {
+ *         ConnectionFailureReason.Refused -> …
+ *         ConnectionFailureReason.TlsBadCertificate -> …
+ *         else -> …
+ *     }
+ * }
+ * ```
+ */
+interface ConnectionFailure {
+    val reason: ConnectionFailureReason
+}
+abstract class PlatformIOException constructor(
+    message: String,
+    cause: Throwable?,
+) : Exception(message, cause)
+sealed class SocketException(
+    override val message: String,
+    override val cause: Throwable? = null,
+) : PlatformIOException(message, cause)
+
+// ──────────────────────────────────────────────────────────────────────
+// Connection closed / lost
+// ──────────────────────────────────────────────────────────────────────
+
+/**
+ * The connection is gone — closed locally, by the peer, or due to a broken pipe / reset.
+ *
+ * Catch this type to handle any "connection lost" scenario uniformly.
+ * Use the subtypes for finer discrimination.
+ *
+ * `abstract` rather than `sealed` so protocol layers built on top of this library (e.g. the QUIC
+ * module's `QuicCloseException`, which carries a structured `QuicError`) can extend it from another
+ * module and still be caught uniformly via `catch (e: SocketClosedException)`. No code relies on
+ * exhaustive `when` over the subtypes — classification uses `is` checks plus an `else`.
+ */
+abstract class SocketClosedException(
+    override val message: String,
+    override val cause: Throwable? = null,
+) : SocketException(message, cause) {
+    /** Generic close — reason unknown or not categorized. */
+    class General(
+        message: String,
+        cause: Throwable? = null,
+    ) : SocketClosedException(message, cause)
+
+    /** Peer sent RST (ECONNRESET / ECONNABORTED). */
+    class ConnectionReset(
+        message: String,
+        cause: Throwable? = null,
+    ) : SocketClosedException(message, cause)
+
+    /** Wrote to a peer that already closed its end (EPIPE). */
+    class BrokenPipe(
+        message: String,
+        cause: Throwable? = null,
+    ) : SocketClosedException(message, cause)
+
+    /** Clean EOF — peer closed the connection gracefully (bytesRead ≤ 0). */
+    class EndOfStream(
+        message: String = "Connection closed by peer",
+        cause: Throwable? = null,
+    ) : SocketClosedException(message, cause)
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Connection establishment failed
+// ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Failed to establish a connection to the remote host.
+ *
+ * Catch this type to handle any "could not connect" scenario.
+ * Use the sealed subtypes for finer discrimination.
+ */
+sealed class SocketConnectionException(
+    override val message: String,
+    override val cause: Throwable? = null,
+) : SocketException(message, cause),
+    ConnectionFailure {
+    /**
+     * The remote host actively refused the connection (ECONNREFUSED).
+     *
+     * [platformError] is retained as **non-discriminating diagnostic detail** only — it is
+     * the raw platform string, which varies per platform/version. Branch on [reason], never on it.
+     */
+    class Refused(
+        val host: String?,
+        val port: Int,
+        cause: Throwable? = null,
+        val platformError: String? = null,
+    ) : SocketConnectionException(
+        "Connection refused: $host:$port${if (platformError != null) " ($platformError)" else ""}",
+        cause,
+    ) {
+        override val reason: ConnectionFailureReason get() = ConnectionFailureReason.Refused
+    }
+
+    /** No route to the destination network (ENETUNREACH). */
+    class NetworkUnreachable(
+        message: String,
+        cause: Throwable? = null,
+    ) : SocketConnectionException(message, cause) {
+        override val reason: ConnectionFailureReason get() = ConnectionFailureReason.NetworkUnreachable
+    }
+
+    /** No route to the destination host (EHOSTUNREACH). */
+    class HostUnreachable(
+        message: String,
+        cause: Throwable? = null,
+    ) : SocketConnectionException(message, cause) {
+        override val reason: ConnectionFailureReason get() = ConnectionFailureReason.HostUnreachable
+    }
+
+    /**
+     * A connection-establishment failure whose cause is [reason] but which has no dedicated named
+     * subtype — e.g. [ConnectionFailureReason.OutOfMemory]. The escape hatch that lets every platform
+     * mapper produce any exhaustive [ConnectionFailureReason] while keeping the common
+     * failures ([Refused] / [NetworkUnreachable] / [HostUnreachable]) as ergonomic named types.
+     */
+    class Other(
+        override val reason: ConnectionFailureReason,
+        message: String,
+        cause: Throwable? = null,
+    ) : SocketConnectionException(message, cause)
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// DNS
+// ──────────────────────────────────────────────────────────────────────
+
+/**
+ * DNS resolution failed for the given hostname.
+ */
+class SocketUnknownHostException(
+    val hostname: String?,
+    extraMessage: String = "",
+    override val cause: Throwable? = null,
+) : SocketException(
+    "Failed to get a socket address for hostname: $hostname${if (extraMessage.isNotEmpty()) "\r\n$extraMessage" else ""}",
+    cause,
+),
+    ConnectionFailure {
+    override val reason: ConnectionFailureReason get() = ConnectionFailureReason.UnknownHost
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Timeout
+// ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Exhaustive, allocation-free description of *what* timed out — the structured source of truth for a
+ * [SocketTimeoutException]. Callers pattern-match on the variant (`when (e.context)`) instead of
+ * parsing a message string; the human-readable [SocketTimeoutException.message] is *derived* from
+ * this on demand, so no string is allocated on the throw path (only if something reads `.message`,
+ * e.g. a logger). This is the timeout-half of the "model error causes as sealed types, not free-form
+ * strings" direction — [Platform] is the explicit quarantine for the one case where a platform
+ * primitive handed us only text (an errno/JDK message) with no structured detail to recover.
+ */
+sealed interface TimeoutContext {
+    /** Human-readable rendering, built lazily by [SocketTimeoutException.message]. */
+    fun describe(): String
+
+    /**
+     * The connect handshake exceeded [deadline]. [host] is `null` only when connecting by raw
+     * address (no hostname) — a genuine absence, not an "unknown deadline" sentinel.
+     */
+    data class Connect(
+        val deadline: Duration,
+        val host: String?,
+        val port: Int,
+    ) : TimeoutContext {
+        override fun describe(): String = "Connection to ${host ?: "?"}:$port timed out after $deadline"
+    }
+
+    /** A read exceeded [deadline] (the `ReadPolicy.Bounded` contract). */
+    data class Read(
+        val deadline: Duration,
+    ) : TimeoutContext {
+        override fun describe(): String = "Read timed out after $deadline"
+    }
+
+    /** A write exceeded [deadline]. */
+    data class Write(
+        val deadline: Duration,
+    ) : TimeoutContext {
+        override fun describe(): String = "Write timed out after $deadline"
+    }
+
+    /**
+     * Opening a stream waited [deadline] for the peer to allow another one (a multiplexed transport
+     * whose peer limits how many streams may be open at once, such as QUIC's MAX_STREAMS). Nothing was
+     * created: the connection is still usable and a later open may succeed.
+     */
+    data class StreamOpen(
+        val deadline: Duration,
+    ) : TimeoutContext {
+        override fun describe(): String = "Stream open timed out after $deadline waiting for the peer's stream limit"
+    }
+
+    /**
+     * A timeout surfaced by a platform primitive that gave us only a string (an errno description,
+     * a JDK exception message, the NIO selector) with no structured operation or deadline to
+     * recover. This is a *distinct variant* — not a null deadline on the typed ones — so "we have
+     * no structured detail" can never be confused with "the deadline happens to be absent". It
+     * quarantines the unavoidable platform-string leak in one named place.
+     */
+    data class Platform(
+        val detail: String,
+    ) : TimeoutContext {
+        override fun describe(): String = detail
+    }
+}
+
+/**
+ * A socket operation timed out (connect / read / write). The typed [context] is the source of truth;
+ * [message] is derived from it lazily (see [TimeoutContext]). [host] / [port] remain first-class so
+ * mappers that know the endpoint can carry it regardless of the [context] variant.
+ */
+class SocketTimeoutException(
+    val context: TimeoutContext,
+    val host: String? = null,
+    val port: Int = -1,
+    override val cause: Throwable? = null,
+) : SocketException("", cause),
+    ConnectionFailure {
+    /**
+     * Back-compat / platform-boundary convenience: wrap a bare string as [TimeoutContext.Platform].
+     * Prefer the [context]-taking primary constructor with a typed [TimeoutContext] variant wherever
+     * the operation and deadline are known (read/write/connect paths we own).
+     */
+    constructor(
+        message: String,
+        host: String? = null,
+        port: Int = -1,
+        cause: Throwable? = null,
+    ) : this(TimeoutContext.Platform(message), host, port, cause)
+
+    // Derived lazily from the typed context — no string is allocated unless `.message` is read.
+    override val message: String get() = context.describe()
+    override val reason: ConnectionFailureReason get() = ConnectionFailureReason.Timeout
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Generic I/O
+// ──────────────────────────────────────────────────────────────────────
+
+/**
+ * A socket I/O error that doesn't fit a more specific category.
+ * This is the catch-all for unexpected or uncategorized errors.
+ */
+class SocketIOException(
+    override val message: String,
+    override val cause: Throwable? = null,
+) : SocketException(message, cause)
+
+/**
+ * A [ByteSink][com.ditchoom.buffer.flow.ByteSink] reported **no progress** while bytes were still
+ * pending, so a write that must complete in full cannot make headway.
+ *
+ * Socket's face of buffer's [ByteSinkStalledException][com.ditchoom.buffer.flow.ByteSinkStalledException],
+ * which is what the shared `writeFully` loop actually raises and which is carried here as [cause]. The
+ * loop is not reimplemented — only the error taxonomy is, and that genuinely belongs to this layer:
+ * this file's contract is "all socket errors", and on JVM/Android that is load-bearing, because
+ * [SocketException] is an `IOException` and consumers are told `catch (e: IOException)` covers this
+ * library. Buffer's type is an `IllegalStateException`, so letting it escape a socket API would leave
+ * a hole in exactly the convention the header promises.
+ *
+ * A stalled sink is a sink CONTRACT violation, not a network condition: back-pressure is expected to
+ * block inside `write` (or park and retry, as the QUIC driver does) and then report at least one byte.
+ * A sink that instead returns zero forever leaves a caller looping with nothing to do — and returning
+ * early would silently truncate the frame, which for a self-framing codec is corruption rather than
+ * loss (the peer keeps reading to the already-declared length and consumes whatever follows).
+ *
+ * Deliberately **not** a [ConnectionFailure]: the peer and the network are fine, the sink is broken, so
+ * there is nothing here to retry or fall back over. Carries the counts as typed fields ([accepted] /
+ * [pending]) rather than only a message, so a caller can discriminate without parsing text.
+ */
+class SocketWriteStalledException(
+    /**
+     * The sink-contract violation being reported, and the single source of truth for the counts.
+     *
+     * Typed and non-null rather than a `Throwable?`: this exception exists only to re-home that one
+     * exception into this family, so there is no second way to construct it and no state where the
+     * counts disagree with the cause they came from.
+     */
+    val stall: ByteSinkStalledException,
+) : SocketException(
+    "stream sink accepted ${stall.accepted} bytes with ${stall.pending} still pending; cannot " +
+            "complete the write without truncating the frame",
+    stall,
+) {
+    /** Bytes the sink accepted on the call that made no progress (zero, or a defensive negative). */
+    val accepted: Int get() = stall.accepted
+
+    /** Bytes still waiting to be written when the sink stalled. */
+    val pending: Int get() = stall.pending
+}
+
+/**
+ * A `CodecConnection` configured with `OverflowPolicy.Fail` was asked to send while its outbound queue
+ * was full.
+ *
+ * Not a transport failure: the connection is healthy and the peer may be perfectly fine — this reports
+ * that *this* sender is producing faster than the peer is draining, at a connection whose caller asked
+ * to be told rather than to shed or to wait. The message was not queued and did not reach the wire, so
+ * the caller still owns it.
+ */
+class OutboundQueueFullException(
+    /** The configured `outboundCapacity` that was reached. Carried so a caller can log or resize. */
+    val capacity: Int,
+) : SocketException(
+    "outbound queue is full at capacity $capacity; the message was not queued. The peer is " +
+            "draining slower than this sender is producing, and this connection's OverflowPolicy is " +
+            "Fail — choose DropOldest/DropNewest to shed, or Suspend to apply back-pressure.",
+)
+
+// ──────────────────────────────────────────────────────────────────────
+// TLS / SSL
+// ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Base class for TLS/SSL errors.
+ */
+sealed class SSLSocketException(
+    message: String,
+    cause: Throwable? = null,
+) : SocketException(message, cause),
+    ConnectionFailure
+
+/**
+ * The TLS handshake failed (certificate validation, protocol mismatch, etc.).
+ *
+ * [reason] defaults to [ConnectionFailureReason.TlsHandshake]; a mapper that can tell the failure was
+ * specifically a certificate rejection passes [ConnectionFailureReason.TlsBadCertificate].
+ */
+class SSLHandshakeFailedException(
+    message: String,
+    cause: Throwable? = null,
+    override val reason: ConnectionFailureReason = ConnectionFailureReason.TlsHandshake,
+) : SSLSocketException(message, cause) {
+    constructor(source: Exception) : this(source.message ?: "Failed to complete SSL handshake", source)
+}
+
+/**
+ * A TLS/SSL protocol error that is not a handshake failure (e.g. TLS attempted against a plaintext peer).
+ */
+class SSLProtocolException(
+    message: String,
+    cause: Throwable? = null,
+    override val reason: ConnectionFailureReason = ConnectionFailureReason.TlsProtocolMismatch,
+) : SSLSocketException(message, cause)
+
+/**
+ * Leaf-certificate hash pinning (W3C `serverCertificateHashes`) rejected the peer. Thrown by the quiche
+ * backend on every platform with QUIC, Apple included, after the handshake, so callers handle one type
+ * with a structured [failure] instead of parsing a message string.
+ *
+ * A subtype of [SSLSocketException], so it is caught uniformly via `catch (e: SSLSocketException)` /
+ * `catch (e: SocketException)` / `catch (e: IOException)` (JVM/Android), while [failure] is a sealed type
+ * a `when` discriminates exhaustively — each case carrying its own detail.
+ */
+class CertificateHashPinningException(
+    val failure: CertificateHashPinningFailure,
+    cause: Throwable? = null,
+) : SSLSocketException(failure.description, cause) {
+    override val reason: ConnectionFailureReason get() = ConnectionFailureReason.TlsBadCertificate
+}
+
+/**
+ * A QUIC client refused the server's certificate chain, for [rejection]. Thrown before the connection is
+ * handed to the caller; the connection is already closed.
+ */
+class ServerCertificateRejectedException(
+    val rejection: ServerCertificateRejection,
+) : SSLSocketException(rejection.description) {
+    override val reason: ConnectionFailureReason get() = ConnectionFailureReason.TlsBadCertificate
+}
+
+/** Why [ServerCertificateRejectedException] was thrown. */
+sealed interface ServerCertificateRejection {
+    val description: String
+
+    /** The server presented no certificate on a connection that was not resumed. */
+    data object NoPeerCertificate : ServerCertificateRejection {
+        override val description get() = "The server presented no certificate"
+    }
+
+    /** One certificate was larger than the [maxBytes] this client reads. */
+    data class CertificateTooLarge(
+        val sizeBytes: Int,
+        val maxBytes: Int,
+    ) : ServerCertificateRejection {
+        override val description get() = "A server certificate ($sizeBytes bytes) exceeds the $maxBytes-byte limit"
+    }
+
+    /** The chain was longer than the [maxCertificates] this client reads. */
+    data class ChainTooLong(
+        val maxCertificates: Int,
+    ) : ServerCertificateRejection {
+        override val description get() = "The server's certificate chain is longer than $maxCertificates certificates"
+    }
+
+    /** The platform trust store refused the chain for [serverName]. */
+    data class UntrustedBySystem(
+        val serverName: String,
+        val failure: SystemTrustFailure,
+    ) : ServerCertificateRejection {
+        override val description get() = "The system trust store does not trust the certificate for $serverName: ${failure.description}"
+    }
+
+    /** The connection's `ServerCertVerifier` rejected the chain. */
+    data class RejectedByVerifier(
+        val reason: String,
+    ) : ServerCertificateRejection {
+        override val description get() = "The server certificate verifier rejected the chain: $reason"
+    }
+}
+
+/** How a platform trust store (Security.framework's `SecTrust`) refused a chain. */
+sealed interface SystemTrustFailure {
+    val description: String
+
+    /** Certificate [index] could not be copied into platform memory. */
+    data class CopyFailed(
+        val index: Int,
+    ) : SystemTrustFailure {
+        override val description get() = "certificate $index could not be copied"
+    }
+
+    /** The platform could not take certificate [index] as a DER X.509 certificate. */
+    data class UnreadableCertificate(
+        val index: Int,
+    ) : SystemTrustFailure {
+        override val description get() = "certificate $index is not a DER X.509 certificate"
+    }
+
+    /** The trust object could not be created; [osStatus] is the platform's status code. */
+    data class TrustCreationFailed(
+        val osStatus: Int,
+    ) : SystemTrustFailure {
+        override val description get() = "trust evaluation could not start (OSStatus $osStatus)"
+    }
+
+    /** Evaluation refused the chain with platform error [code] (a `CFError` code); [platformDescription] is its text. */
+    data class Refused(
+        val code: Long,
+        val platformDescription: String,
+    ) : SystemTrustFailure {
+        override val description get() = "$platformDescription (CFError $code)"
+    }
+
+    /** Evaluation refused the chain without reporting an error. */
+    data object RefusedWithoutError : SystemTrustFailure {
+        override val description get() = "evaluation refused the chain"
+    }
+}
+
+/**
+ * Why [CertificateHashPinningException] rejected the peer. Sealed so each case carries case-specific data
+ * and callers can branch exhaustively; new cases extend the hierarchy where they need to.
+ */
+sealed interface CertificateHashPinningFailure {
+    /** Human-readable summary; the exception's `message`. The structured fields are the API surface. */
+    val description: String
+
+    /** The peer presented no leaf certificate to verify against the pins. */
+    data object NoPeerCertificate : CertificateHashPinningFailure {
+        override val description get() = "Peer presented no leaf certificate to match against serverCertificateHashes"
+    }
+
+    /**
+     * A leaf certificate was presented and hashed, but its digest matched none of the [pinnedCount]
+     * pinned hashes. [computedLeafHash] is the algorithm-prefixed hex of the leaf the server actually
+     * presented (e.g. `"sha-256:3e7b…"`) — the value to add to `serverCertificateHashes` to accept it.
+     */
+    data class HashMismatch(
+        val pinnedCount: Int,
+        val computedLeafHash: String,
+    ) : CertificateHashPinningFailure {
+        override val description get() =
+            "Server leaf certificate ($computedLeafHash) matched none of the $pinnedCount pinned serverCertificateHashes"
+    }
+
+    /**
+     * The peer's leaf certificate DER ([sizeBytes]) exceeded the maximum the backend will read
+     * ([maxBytes]), so it could not be hashed. A fail-closed guard of the quiche backend.
+     */
+    data class CertificateTooLarge(
+        val sizeBytes: Int,
+        val maxBytes: Int,
+    ) : CertificateHashPinningFailure {
+        override val description get() = "Peer leaf certificate ($sizeBytes bytes) exceeds the $maxBytes-byte limit for hash pinning"
+    }
+
+    // --- W3C serverCertificateHashes certificate constraints (checked once the hash matches) ---
+    // These mirror what a browser additionally requires of a `serverCertificateHashes` leaf, so native
+    // accepts exactly the certificates a browser would.
+
+    /**
+     * The pinned leaf's validity period ([validity], notAfter − notBefore) exceeds the W3C
+     * `serverCertificateHashes` maximum ([maxValidity], 14 days).
+     */
+    data class ValidityPeriodTooLong(
+        val validity: Duration,
+        val maxValidity: Duration,
+    ) : CertificateHashPinningFailure {
+        override val description get() =
+            "Pinned leaf certificate validity ($validity) exceeds the serverCertificateHashes maximum ($maxValidity)"
+    }
+
+    /**
+     * The current time [now] is outside the pinned leaf's validity window [notBefore]..[notAfter] — the
+     * certificate is expired or not yet valid.
+     */
+    data class NotTemporallyValid(
+        val notBefore: Instant,
+        val notAfter: Instant,
+        val now: Instant,
+    ) : CertificateHashPinningFailure {
+        override val description get() = "Pinned leaf certificate is not valid at $now (valid $notBefore .. $notAfter)"
+    }
+
+    /**
+     * The pinned leaf's public key is not the W3C-required ECDSA P-256 (secp256r1). [detail] describes
+     * what was found (e.g. the algorithm/curve OID).
+     */
+    data class UnsupportedPublicKey(
+        val detail: String,
+    ) : CertificateHashPinningFailure {
+        override val description get() = "Pinned leaf certificate public key is not ECDSA P-256: $detail"
+    }
+
+    /**
+     * The leaf certificate matched a pin but its DER could not be parsed to extract the W3C constraint
+     * fields (validity / public key) — so the constraints could not be checked. Should be unreachable
+     * (the leaf was already read and hashed), but the verifier fails closed rather than skip the
+     * constraints. [detail] describes the parse error.
+     */
+    data class CertificateParseFailed(
+        val detail: String,
+    ) : CertificateHashPinningFailure {
+        override val description get() = "Pinned leaf certificate matched a pin but could not be parsed to check W3C constraints: $detail"
+    }
+}

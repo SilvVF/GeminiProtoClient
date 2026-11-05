@@ -10,11 +10,22 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import io.ktor.http.Url
+import io.ktor.network.selector.SelectorManager
+import io.ktor.network.sockets.aSocket
+import io.ktor.network.sockets.openReadChannel
+import io.ktor.network.sockets.openWriteChannel
 import io.ktor.network.tls.TLSConfigBuilder
+import io.ktor.network.tls.tls
+import io.ktor.utils.io.core.readAvailable
+import io.ktor.utils.io.readBuffer
+import io.ktor.utils.io.writeString
 import ios.silv.logcat.logcat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
+import kotlinx.io.Buffer
 import okio.FileSystem
 import okio.Path.Companion.toOkioPath
 import java.security.MessageDigest
@@ -24,6 +35,7 @@ import java.security.cert.X509Certificate
 import java.util.Date
 import javax.net.ssl.X509TrustManager
 import kotlin.time.ExperimentalTime
+import kotlin.use
 
 fun AndroidGeminiClient(context: Context) = GeminiClient(
     fileSystem = FileSystem.SYSTEM,
@@ -104,7 +116,49 @@ private fun createTofuTrustManager(
     }
 }
 
-internal actual fun TLSConfigBuilder.applyPlatformTofuConfig(url: Url, store: DataStore<Preferences>) {
-    this.random = SecureRandom()
-    this.trustManager = createTofuTrustManager(store, url.host, "${url.port}")
+class KtorSocketFactory(
+    private val selector: SelectorManager,
+    private val store: DataStore<Preferences>,
+) : SocketFactory {
+
+    override suspend fun connect(url: Url): SecureSocket {
+        val socket = aSocket(selector)
+            .tcp()
+            .connect(url.host, url.port)
+            .tls(Dispatchers.IO) {
+                this.random = SecureRandom()
+                this.trustManager = createTofuTrustManager(store, url.host, "${url.port}")
+            }
+
+        val readChannel = socket.openReadChannel()
+        val writeChannel = socket.openWriteChannel()
+
+        return object : SecureSocket {
+            override suspend fun read(buffer: Buffer): Int {
+                return readChannel.readBuffer().use {
+                    it.readAvailable(buffer)
+                }
+            }
+
+            override suspend fun write(data: String) {
+                writeChannel.writeString(data)
+            }
+
+            override suspend fun flush() {
+                writeChannel.flush()
+            }
+
+            override fun close() {
+                socket.close()
+            }
+        }
+    }
+}
+
+internal actual fun createSocket(
+    selector: SelectorManager,
+    url: Url,
+    store: DataStore<Preferences>
+): SocketFactory {
+    return KtorSocketFactory(selector, store)
 }

@@ -84,4 +84,6 @@ room3 {
 dependencies {
     kspAndroid(libs.androidx.room3.compiler)
     androidRuntimeClasspath(libs.compose.uiTooling)
+    add("kspIosSimulatorArm64", libs.androidx.room3.compiler)
+    add("kspIosArm64", libs.androidx.room3.compiler)
 }

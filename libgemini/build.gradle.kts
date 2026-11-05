@@ -1,8 +1,18 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidMultiplatformLibrary)
+}
+
+fun KotlinNativeTarget.configureNWHelpersCinterop() {
+    compilations["main"].cinterops {
+        create("NWHelpers") {
+            defFile("src/nativeInterop/cinterop/NWHelpers.def")
+            includeDirs("src/nativeInterop/cinterop")
+        }
+    }
 }
 
 kotlin {
@@ -10,6 +20,7 @@ kotlin {
         iosArm64(),
         iosSimulatorArm64()
     ).forEach { iosTarget ->
+        iosTarget.configureNWHelpersCinterop()
         iosTarget.binaries.framework {
             baseName = "Libgemini"
             isStatic = true
@@ -49,6 +60,10 @@ kotlin {
             implementation(libs.okio)
             implementation(libs.androidx.datastore.core)
             implementation(libs.androidx.datastore)
+
+            implementation("com.ditchoom:buffer:6.30.8")
+            implementation("com.ditchoom:buffer-flow:6.30.8")
+            implementation("com.ditchoom:buffer-kotlinx-io:6.30.8")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

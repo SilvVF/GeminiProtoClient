@@ -72,6 +72,7 @@ import ios.silv.libgemini.gemini.suspendRunCatching
 import ios.silv.logcat.asLog
 import ios.silv.logcat.logcat
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
@@ -423,6 +424,7 @@ private fun PageReadyContent(
     )
 }
 
+@OptIn(FlowPreview::class)
 @Composable
 private fun NavBlock(
     state: PageLoad.Ready,

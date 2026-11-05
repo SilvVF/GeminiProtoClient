@@ -1,6 +1,5 @@
 package ios.silv.gembrowse
 
-import android.app.Application
 import android.content.Context
 import android.os.Build
 import androidx.datastore.core.DataStore

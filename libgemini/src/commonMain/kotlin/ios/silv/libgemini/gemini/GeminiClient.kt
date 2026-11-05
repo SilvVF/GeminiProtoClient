@@ -13,7 +13,10 @@ import io.ktor.network.sockets.openReadChannel
 import io.ktor.network.sockets.openWriteChannel
 import io.ktor.network.tls.TLSConfigBuilder
 import io.ktor.network.tls.tls
+import io.ktor.util.Platform
+import io.ktor.util.PlatformUtils
 import io.ktor.utils.io.core.readAvailable
+import io.ktor.utils.io.flushIfNeeded
 import io.ktor.utils.io.readBuffer
 import io.ktor.utils.io.readRemaining
 import io.ktor.utils.io.writeString
@@ -91,10 +94,24 @@ data class ClientConfig(
     val maxRedirects: Int = 5
 )
 
-internal expect fun TLSConfigBuilder.applyPlatformTofuConfig(
+internal expect fun createSocket(
+    selector: SelectorManager,
     url: Url,
     store: DataStore<Preferences>
-)
+): SocketFactory
+
+interface SecureSocket: AutoCloseable {
+    suspend fun read(buffer: Buffer): Int
+    suspend fun write(data: String)
+    suspend fun flush()
+    override fun close()
+}
+
+interface SocketFactory {
+    suspend fun connect(
+        url: Url,
+    ): SecureSocket
+}
 
 class GeminiClient(
     private val cache: IGeminiCache,
@@ -102,7 +119,6 @@ class GeminiClient(
     private val fileSystem: okio.FileSystem,
     storage: Storage<Preferences>
 ) {
-
     private val store: DataStore<Preferences> = createDataStore(storage)
     private val selector = config.selector
 
@@ -166,14 +182,9 @@ class GeminiClient(
 
     private suspend fun openNewConnection(
         url: Url,
-    ): Socket {
-        return aSocket(selector).tcp().connect(
-            url.host,
-            url.port,
-        )
-            .tls(Dispatchers.IO) {
-                applyPlatformTofuConfig(url, store)
-            }
+    ): SecureSocket {
+        val socket = createSocket(selector, url, store)
+        return socket.connect(url)
     }
 
     private suspend fun fetch(
@@ -221,16 +232,12 @@ class GeminiClient(
             logcat { "Trying to connect to ${url.host}:${url.port} - $url" }
 
             openNewConnection(url).use { conn ->
-                val writeChannel = conn.openWriteChannel(true)
-                val readChannel = conn.openReadChannel()
 
-                writeChannel.writeString("${url}\r\n")
+                conn.write("${url}\r\n")
 
                 val buffer = Buffer()
 
-                readChannel.readBuffer().use {
-                    it.readAvailable(buffer)
-                }
+                conn.read(buffer)
                 val header = consumeHeader(buffer).getOrThrow()
 
                 when (header.status) {

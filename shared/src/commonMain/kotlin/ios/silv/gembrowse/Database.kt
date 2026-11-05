@@ -1,3 +1,5 @@
+@file:Suppress("EXPECT_ACTUAL_CLASSIFIERS_ARE_IN_BETA_WARNING")
+
 package ios.silv.gembrowse
 
 
@@ -31,6 +33,11 @@ fun getRoomDatabase(
         .build()
 }
 
+@Suppress("KotlinNoActualForExpect")
+expect object AppDatabaseConstructor : RoomDatabaseConstructor<AppDatabase> {
+    override fun initialize(): AppDatabase
+}
+
 @Database(entities = [PageEntity::class, TabEntity::class], version = 1)
 @ConstructedBy(AppDatabaseConstructor::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -38,12 +45,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun getTabDao(): TabDao
     abstract fun getCombinedDao(): CombinedDao
 }
-
-@Suppress("KotlinNoActualForExpect")
-expect object AppDatabaseConstructor : RoomDatabaseConstructor<AppDatabase> {
-    override fun initialize(): AppDatabase
-}
-
 @Dao
 interface CombinedDao : TabDao, PageDao {
 

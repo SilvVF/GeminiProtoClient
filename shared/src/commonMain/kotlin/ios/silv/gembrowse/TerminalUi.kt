@@ -80,6 +80,8 @@ import ios.silv.libgemini.gemini.suspendRunCatching
 import ios.silv.logcat.asLog
 import ios.silv.logcat.logcat
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.combine
@@ -101,6 +103,7 @@ val LocalErrorHandler = compositionLocalOf<ErrorHandler> {
     }
 }
 
+@OptIn(FlowPreview::class)
 @Composable
 fun LazyListState.sampleScrollingState(sample: Duration = 800.milliseconds): State<Boolean> {
     return produceState(false) {
@@ -120,6 +123,7 @@ fun LazyListState.sampleScrollingState(sample: Duration = 800.milliseconds): Sta
     }
 }
 
+@OptIn(ExperimentalForInheritanceCoroutinesApi::class)
 @Stable
 class EventFlow<T>(
     replay: Int = 0,
