@@ -16,20 +16,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridItemScope
@@ -37,16 +32,13 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.BottomAppBarDefaults
 import androidx.compose.material3.CardColors
 import androidx.compose.material3.CardDefaults
@@ -64,13 +56,12 @@ import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxState
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -117,6 +108,7 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
+import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyGridState
@@ -128,92 +120,78 @@ enum class BarMode {
 val LocalBarMode =
     compositionLocalOf<MutableTransitionState<BarMode>> { error("not provided in scope") }
 
+@Stable
 data class TabItem(
-    val tab: TabEntity,
-    val activePage: PageEntity? = null,
+    val state: TabState,
     val previewLink: String? = null,
 )
-
-private fun updateListPreserveOrder(
-    prev: List<TabItem>, new: List<TabItem>
-): List<TabItem> {
-
-    val newValues = new.groupBy { (tab) -> tab.id }
-    val updated = prev.mapNotNull { (tab) -> newValues[tab.id]?.firstOrNull() }
-
-    val updatedKeys = updated.map { (tab) -> tab.id }.toSet()
-    val added = new.filter { (tab) -> tab.id !in updatedKeys }
-
-    return buildList {
-        addAll(updated)
-        addAll(added)
-    }
-}
 
 @OptIn(DependencyAccessor::class)
 @Composable
 fun searchPresenter(
     backStack: SnapshotStateStack<Route>,
     events: EventFlow<BarEvent>,
-    dao: CombinedDao = commonDeps.combinedDao,
-    database: AppDatabase = commonDeps.database,
+    tabsDao: TabDao = commonDeps.tabDao,
+    db: AppDatabase = commonDeps.database,
     previewCache: PreviewCache = commonDeps.previewCache
 ): BarState {
 
+    val scope = rememberRetainedCoroutineScope()
     var query by retain { mutableStateOf("") }
 
-    val orderedTabs = retain {
-        mutableStateListOf<TabItem>()
+    val tabs by produceRetainedState(emptyList()) {
+        tabsDao.observeTabStates().collect { states ->
+            value = states.map { state ->
+                TabItem(
+                    state = state,
+                    previewLink = previewCache.read(state.page?.url.orEmpty()).toString()
+                )
+            }
+        }
     }
-    val tabs by dao.selectTabsWithActivePage().collectAsRetainedState(emptyList())
 
-    val visibleTab by remember {
+    val visibleItem by remember {
         derivedStateOf {
             val route = backStack.lastItemOrNull as? TabRoute
-            tabs.firstOrNull { (tab, page) -> tab.id == route?.id }
+            tabs.firstOrNull { (state, _) -> state.tab.id == route?.id }
         }
     }
 
-    LaunchedEffect(visibleTab) {
-        if (visibleTab != null) {
-            query = visibleTab?.page?.url.orEmpty()
-        }
-    }
-
+    val orderedTabs = retain { mutableStateListOf(*tabs.toTypedArray()) }
     LaunchedEffect(tabs) {
-        val newTabs = updateListPreserveOrder(
-            orderedTabs, tabs.map { (tab, page) ->
-                TabItem(
-                    tab, page, previewCache.read(page?.url.orEmpty()).toString()
-                )
-            })
         Snapshot.withMutableSnapshot {
             orderedTabs.clear()
-            orderedTabs.addAll(newTabs)
+            orderedTabs.addAll(tabs)
+            orderedTabs.sortBy { tabItem -> tabItem.state.tab.sortOrder }
         }
     }
 
+    LaunchedEffect(visibleItem) {
+        if (visibleItem != null) {
+            query = visibleItem?.state?.page?.url.orEmpty()
+        }
+    }
 
     EventEffect(events) { event ->
         when (event) {
             BarEvent.CreateBlankTab -> {
-                val tab = database.createTab(null)
+                val tab = db.createTab(null)
                 if (tab != null) {
                     backStack.push(TabRoute(tab.id))
                 }
             }
 
             is BarEvent.CreateNewPage -> {
-                database.createPage(query, event.tabId)
+                db.navigate(event.tabId, query)
             }
 
             BarEvent.CreateNewTab -> {
-                val tab = database.createTab(query) ?: return@EventEffect
+                val tab = db.createTab(query) ?: return@EventEffect
                 backStack.push(TabRoute(tab.id))
             }
 
             is BarEvent.DeleteTab -> {
-                dao.deleteTabById(event.id)
+                tabsDao.deleteTabById(event.id)
             }
 
             is BarEvent.GoToTab -> {
@@ -221,9 +199,10 @@ fun searchPresenter(
             }
 
             is BarEvent.ReorderTabs -> {
-                orderedTabs.add(
-                    event.to, orderedTabs.removeAt(event.from)
-                )
+                orderedTabs.add(event.to, orderedTabs.removeAt(event.from))
+                scope.launch {
+                    db.reorderTabs(orderedTabs.map { tabItem -> tabItem.state.tab.id })
+                }
             }
 
             is BarEvent.SearchChanged -> query = event.query
@@ -234,7 +213,10 @@ fun searchPresenter(
     }
 
     return BarState(
-        tabs = orderedTabs, query = query, active = visibleTab, showSearchbar = true
+        tabs = orderedTabs,
+        query = query,
+        active = visibleItem,
+        showSearchbar = true
     )
 }
 
@@ -242,15 +224,15 @@ sealed interface BarEvent {
     data class SearchChanged(val query: String) : BarEvent
     data class ReorderTabs(val from: Int, val to: Int) : BarEvent
     data class GoToTab(val tab: TabEntity) : BarEvent
-    data class DeleteTab(val id: Int) : BarEvent
+    data class DeleteTab(val id: Long) : BarEvent
     data object CreateNewTab : BarEvent
     data object CreateBlankTab : BarEvent
-    data class CreateNewPage(val tabId: Int) : BarEvent
+    data class CreateNewPage(val tabId: Long) : BarEvent
     data object GoToHome : BarEvent
 }
 
 data class BarState(
-    val active: TabWithActivePage?,
+    val active: TabItem?,
     val showSearchbar: Boolean,
     val tabs: List<TabItem> = emptyList(),
     val query: String = "",
@@ -331,7 +313,7 @@ fun BottombarScaffold(
                 onSearch = {
                     val active = state.active
                     if (active != null) {
-                        events.tryEmit(BarEvent.CreateNewPage(active.tab.id))
+                        events.tryEmit(BarEvent.CreateNewPage(active.state.tab.id))
                     } else {
                         events.tryEmit(BarEvent.CreateNewTab)
                     }
@@ -427,15 +409,16 @@ private fun TabReorderGrid(
     ) {
         itemsIndexed(
             items = state.tabs,
-            key = { _, it -> it.tab.id }) { idx, (tab, activePage, previewImage) ->
+            key = { _, tabItem -> tabItem.state.tab.id }
+        ) { idx, (tabState, previewLink) ->
             val swipeToDismissState = rememberSwipeToDismissBoxState()
-            val isTop = state.active?.tab?.id == tab.id
+            val isTop = state.active?.state?.tab?.id == tabState.tab.id
 
             LaunchedEffect(swipeToDismissState.settledValue) {
                 when (swipeToDismissState.settledValue) {
                     SwipeToDismissBoxValue.StartToEnd, SwipeToDismissBoxValue.EndToStart -> {
                         events.tryEmit(
-                            BarEvent.DeleteTab(tab.id)
+                            BarEvent.DeleteTab(tabState.tab.id)
                         )
                     }
 
@@ -449,16 +432,16 @@ private fun TabReorderGrid(
                 isTop = isTop,
                 onClose = {
                     events.tryEmit(
-                        BarEvent.DeleteTab(tab.id)
+                        BarEvent.DeleteTab(tabState.tab.id)
                     )
                 },
                 onSelected = {
                     barMode.targetState = BarMode.NONE
-                    events.tryEmit(BarEvent.GoToTab(tab))
+                    events.tryEmit(BarEvent.GoToTab(tabState.tab))
                 },
-                tab = tab,
-                activePage = activePage,
-                previewImage = previewImage,
+                tab = tabState.tab,
+                activePage = tabState.page,
+                previewImage = previewLink,
                 colors = colors,
                 idx = idx
             )
@@ -483,7 +466,8 @@ private fun LazyGridItemScope.TabPreviewItem(
     val interactionSource = remember { MutableInteractionSource() }
 
     ReorderableItem(
-        reorderableLazyGridState, key = tab.id
+        reorderableLazyGridState,
+        key = tab.id
     ) {
         SwipeToDismissBox(
             state = swipeToDismissState,
@@ -541,8 +525,9 @@ private fun LazyGridItemScope.TabPreviewItem(
                     AsyncImage(
                         model = ImageRequest.Builder(LocalPlatformContext.current)
                             .data(previewImage)
-                            .memoryCacheKey("${previewImage}_${tab.prevImageUpdatedAt}")
-                            .diskCacheKey("${previewImage}_${tab.prevImageUpdatedAt}").build(),
+                            .memoryCacheKey("${previewImage}_${tab.thumbnailUpdatedAt}")
+                            .diskCacheKey("${previewImage}_${tab.thumbnailUpdatedAt}")
+                            .build(),
                         contentDescription = null,
                         contentScale = ContentScale.FillWidth,
                         modifier = Modifier.fillMaxWidth().weight(1f)

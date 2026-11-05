@@ -76,44 +76,47 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.distinctUntilChangedBy
-import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlin.collections.orEmpty
+import kotlin.collections.take
 import kotlin.time.Duration.Companion.seconds
 
-data class ActivePage(
-    val tab: TabEntity,
-    val page: PageEntity?
-)
+private suspend fun GeminiClient.loadPage(
+    activePage: PageEntity,
+    fetchId: Int
+): PageLoad {
+    return makeGeminiQuery(query = activePage.url, forceNetwork = fetchId > 0).fold(onSuccess = {
+        logcat { "res ${it.status}" }
+        if (it.status == GeminiCode.INPUT) {
+            PageLoad.Ready.Input(activePage, "enter input")
+        } else {
+            val nodes = GeminiParser.parse(activePage.baseUrl, it).map(::UiNode).toList()
 
-private suspend fun GeminiClient.loadPage(activePage: PageEntity, fetchId: Int): PageLoad {
-    return makeGeminiQuery(query = activePage.url, forceNetwork = fetchId > 0)
-        .fold(
-            onSuccess = {
-                logcat { "res ${it.status}" }
-                if (it.status == GeminiCode.INPUT) {
-                    PageLoad.Ready.Input(activePage, "enter input")
-                } else {
-                    val nodes = GeminiParser.parse(activePage.url, it)
-                        .map(::UiNode)
-                        .toList()
+            PageLoad.Ready.Content(
+                activePage, nodes
+            )
+        }
+    }, onFailure = {
+        logcat { it.asLog() }
+        PageLoad.Error(it.message.orEmpty())
+    })
+}
 
-                    PageLoad.Ready.Content(
-                        activePage,
-                        nodes
-                    )
-                }
-            },
-            onFailure = {
-                logcat { it.asLog() }
-                PageLoad.Error(it.message.orEmpty())
+private suspend fun Settings.addPageToRecentlyViewed(page: PageLoad) = suspendRunCatching {
+    when (page) {
+        is PageLoad.Ready -> edit { prefs ->
+            prefs[Keys.recentlyViewed] = buildSet {
+                add(page.page.baseUrl)
+                addAll(prefs[Keys.recentlyViewed].orEmpty().take(9))
             }
-        )
+        }
+
+        else -> Unit
+    }
 }
 
 @OptIn(DependencyAccessor::class)
@@ -121,41 +124,41 @@ private suspend fun GeminiClient.loadPage(activePage: PageEntity, fetchId: Int):
 fun pagePresenter(
     backStack: SnapshotStateStack<Route>,
     events: EventFlow<PageEvent>,
-    tabId: Int,
+    tabId: Long,
     client: GeminiClient = commonDeps.geminiClient,
     settings: Settings = commonDeps.settingsStore,
-    dao: CombinedDao = commonDeps.combinedDao,
+    db: AppDatabase = commonDeps.database,
+    tabDao: TabDao = commonDeps.tabDao,
+    pageDao: PageDao = commonDeps.pageDao,
     previewCache: PreviewCache = commonDeps.previewCache,
-    database: AppDatabase = commonDeps.database
 ): PageState {
 
     var error by retain { mutableStateOf<String?>(null) }
-    val active by produceRetainedState<ActivePage?>(null) {
-        dao.selectTabWithActivePage(tabId)
-            .catch { error = "failed to load" }
-            .collect { tabWithPage ->
-                logcat { "tab $tabWithPage" }
-                Snapshot.withMutableSnapshot {
-                    if (tabWithPage == null) {
-                        error = "failed to load tab"
-                    } else {
-                        value = ActivePage(tabWithPage.tab, tabWithPage.page)
-                        error = null
-                    }
+    val active by produceRetainedState<TabState?>(null) {
+        tabDao.observeTabState(tabId).catch { error = "failed to load" }.collect { tabState ->
+            logcat { "tab $tabState" }
+            Snapshot.withMutableSnapshot {
+                if (tabState == null) {
+                    error = "failed to load tab"
+                } else {
+                    value = tabState
+                    error = null
                 }
             }
+        }
     }
 
-    val loading by remember { derivedStateOf { active == null && error == null } }
+    val waitingForTabState by remember { derivedStateOf { active == null && error == null } }
     var input by retain { mutableStateOf("") }
     var fetchId by retain { mutableIntStateOf(0) }
     var refreshing by retain { mutableStateOf(false) }
 
     var page by retain { mutableStateOf<PageLoad>(PageLoad.Idle) }
 
-    LaunchedEffect(active, loading) {
-        val linksSame = (active?.page?.url == page.urlOrNull && page != PageLoad.Idle)
-        if (loading || linksSame) return@LaunchedEffect
+    LaunchedEffect(active, waitingForTabState) {
+        val linksSame = (page != PageLoad.Idle && active?.page?.baseUrl == page.urlOrNull)
+        if (waitingForTabState || linksSame) return@LaunchedEffect
+
         fetchId = 0
         val activePage = active?.page
         if (activePage == null) {
@@ -167,6 +170,7 @@ fun pagePresenter(
                 refreshing = true
                 try {
                     page = client.loadPage(activePage, id)
+                    pageDao.updateResolvedUrl(activePage.id, page.urlOrNull)
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     page = PageLoad.Error(e.message.orEmpty())
@@ -178,17 +182,7 @@ fun pagePresenter(
     }
 
     LaunchedEffect(page) {
-        suspendRunCatching {
-            val page = page
-            if (page is PageLoad.Ready) {
-                settings.edit { prefs ->
-                    prefs[Keys.recentlyViewed] = buildSet {
-                        add(page.page.url)
-                        addAll(prefs[Keys.recentlyViewed].orEmpty().take(9))
-                    }
-                }
-            }
-        }
+        settings.addPageToRecentlyViewed(page)
     }
 
     EventEffect(events) { event ->
@@ -200,58 +194,43 @@ fun pagePresenter(
             }
 
             is Submit -> {
-                database.createPage(event.url + "?query=${input}", tabId)
+                db.navigate(
+                    tabId,
+                    event.url + "?query=${input}"
+                )
             }
 
             is PreviewSaved -> {
                 logcat { "writing preview to cache ${event.page.tabId}" }
                 previewCache.write(
-                    url = event.page.url,
-                    bitmap = event.bitmap
+                    url = event.page.url, bitmap = event.bitmap
                 ).onSuccess {
-                    dao.updatePrevImageUpdatedAt(event.page.tabId)
+                    tabDao.updateThumbnailUpdatedAt(event.page.tabId)
                 }
             }
 
             is GoBack -> {
-                val tabRemoved = database.withWriteTransaction {
-                    val activePageId = dao.selectTabById(event.tab.id)?.activePageId
-
-                    if (activePageId != null) {
-                        dao.deletePageById(activePageId)
-                        false
-                    } else {
-                        dao.deleteTabById(event.tab.id)
-                        true
-                    }
-                }
-                logcat { "tab removed=$tabRemoved" }
-                if (tabRemoved) {
-                    if (!backStack.pop()) backStack.replaceAll(HomeRoute)
-                }
+                val page = db.goBack(tabId)
+                logcat { "navigated back to $page" }
             }
 
             is LoadPage -> {
                 if (event.link.isNotBlank()) {
-                    database.createPage(event.link, tabId)
+                    db.navigate(tabId, event.link)
                 }
             }
 
             is CreateTab -> {
-                val tabId = dao.insertTab(null)
-                if (event.link.isNotBlank()) {
-                    database.createPage(event.link, tabId.toInt())
+                val tab = db.createTab(event.link)
+                if (tab != null) {
+                    backStack.push(TabRoute(id = tab.id))
                 }
-                backStack.push(TabRoute(id = tabId.toInt()))
             }
         }
     }
 
     return PageState(
-        tab = active?.tab,
-        page = page,
-        loading = loading,
-        error = error
+        tab = active?.tab, page = page, loading = waitingForTabState, error = error
     )
 }
 
@@ -268,9 +247,7 @@ sealed interface PageEvent {
 @Immutable
 @Stable
 data class UiNode(
-    val node: ContentNode,
-    val key: String? = null,
-    val contentType: String = node::class.toString()
+    val node: ContentNode, val key: String? = null, val contentType: String = node::class.toString()
 )
 
 data class PageState(
@@ -294,7 +271,7 @@ sealed interface PageLoad {
     data class Error(val message: String) : PageLoad
 
     val nodesOrNull get() = (this as? Ready.Content)?.nodes
-    val urlOrNull get() = (this as? Ready)?.page?.url
+    val urlOrNull get() = (this as? Ready)?.page?.baseUrl
 }
 
 @Composable
@@ -319,11 +296,9 @@ fun PageContent(
     }
 
     NavigationBackHandler(
-        state = state,
-        onBackCompleted = {
+        state = state, onBackCompleted = {
             events.tryEmit(GoBack(pageState.tab))
-        }
-    )
+        })
 
     when (val page = pageState.page) {
         is PageLoad.Error -> {
@@ -350,8 +325,7 @@ fun PageContent(
                 onRefresh = {
                     events.tryEmit(Refresh)
                 },
-                modifier = Modifier
-                    .fillMaxSize()
+                modifier = Modifier.fillMaxSize()
                     .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top)),
             ) {
                 PageReadyContent(page, events)
@@ -363,8 +337,7 @@ fun PageContent(
 
 @Composable
 private fun PageInputContent(
-    state: PageLoad.Ready.Input,
-    events: EventFlow<PageEvent>
+    state: PageLoad.Ready.Input, events: EventFlow<PageEvent>
 ) {
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(
@@ -374,22 +347,18 @@ private fun PageInputContent(
                 IconButton(
                     onClick = {
                         events.tryEmit(Submit(""))
-                    }
-                ) {
+                    }) {
                     Icon(
-                        Icons.Default.Done,
-                        contentDescription = null
+                        Icons.Default.Done, contentDescription = null
                     )
                 }
-            }
-        )
+            })
     }
 }
 
 @Composable
 private fun PageReadyContent(
-    pageState: PageLoad.Ready,
-    pageEvents: EventFlow<PageEvent>
+    pageState: PageLoad.Ready, pageEvents: EventFlow<PageEvent>
 ) {
     val listState = rememberLazyListState()
     val savedScrollPositions = retain { mutableMapOf<PageEntity, Int>() }
@@ -400,28 +369,20 @@ private fun PageReadyContent(
             listState.scrollToItem(lastScrollIdx)
         }
 
-        snapshotFlow { listState.firstVisibleItemIndex }
-            .collectLatest {
-                savedScrollPositions[pageState.page] = it
-            }
+        snapshotFlow { listState.firstVisibleItemIndex }.collectLatest {
+            savedScrollPositions[pageState.page] = it
+        }
     }
 
-    DraggableNavLayout(
-        navBlock = {
-            NavBlock(
-                listState = listState,
-                state = pageState,
-                events = pageEvents
-            )
-        },
-        stdOutBlock = {
-            StdOutBlock(
-                pageState,
-                pageEvents,
-                listState
-            )
-        }
-    )
+    DraggableNavLayout(navBlock = {
+        NavBlock(
+            listState = listState, state = pageState, events = pageEvents
+        )
+    }, stdOutBlock = {
+        StdOutBlock(
+            pageState, pageEvents, listState
+        )
+    })
 }
 
 @OptIn(FlowPreview::class)
@@ -435,13 +396,10 @@ private fun NavBlock(
     TerminalSection(
         label = {
             TerminalSectionDefaults.Label("nav")
-        }
-    ) {
+        }) {
         val headings by remember(state) {
             derivedStateOf {
-                state.nodesOrNull
-                    ?.map { it.node }
-                    ?.filterIsInstance<ContentNode.Line.Heading>()
+                state.nodesOrNull?.map { it.node }?.filterIsInstance<ContentNode.Line.Heading>()
                     .orEmpty()
             }
         }
@@ -451,12 +409,9 @@ private fun NavBlock(
                     val node = state.nodesOrNull?.getOrNull(it.index)?.node
                     node as? ContentNode.Line.Heading
                 }
+            }.distinctUntilChanged().sample(10L).collect { heading ->
+                value = heading
             }
-                .distinctUntilChanged()
-                .sample(10L)
-                .collect { heading ->
-                    value = heading
-                }
         }
 
         LazyColumn(
@@ -475,20 +430,16 @@ private fun NavBlock(
                                 }
                             }
                         }
-                    },
-                    colors = ButtonDefaults.textButtonColors(
+                    }, colors = ButtonDefaults.textButtonColors(
                         containerColor = if (current == node) {
                             MaterialTheme.colorScheme.primaryContainer
                         } else {
                             Color.Unspecified
                         }
-                    ),
-                    shape = RectangleShape,
-                    modifier = Modifier.fillMaxWidth()
+                    ), shape = RectangleShape, modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = node.heading,
-                        style = MaterialTheme.typography.labelSmall
+                        text = node.heading, style = MaterialTheme.typography.labelSmall
                     )
                 }
                 HorizontalDivider()
@@ -512,12 +463,9 @@ private fun StdOutBlock(
         modifier = Modifier.padding(horizontal = TerminalSectionDefaults.horizontalPadding),
         label = {
             TerminalSectionDefaults.Label("std-out")
-        }
-    ) {
+        }) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 2.dp)
+            modifier = Modifier.fillMaxSize().padding(horizontal = 2.dp)
                 .capturable(captureController)
         ) {
             val scrollToTopVisible by listState.sampleScrollingState()
@@ -540,11 +488,9 @@ private fun StdOutBlock(
                     } else {
                         item(key = key, contentType = contentType) {
                             node.Render(
-                                events = events,
-                                recapture = {
+                                events = events, recapture = {
                                     recapId += 1
-                                }
-                            )
+                                })
                         }
                     }
                 }
@@ -552,15 +498,12 @@ private fun StdOutBlock(
 
             TerminalScrollToTop(
                 visible = scrollToTopVisible,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .offset { IntOffset(0, -12) },
+                modifier = Modifier.align(Alignment.BottomCenter).offset { IntOffset(0, -12) },
                 onClick = {
                     scope.launch {
                         listState.animateScrollToItem(0)
                     }
-                }
-            )
+                })
         }
         // This must be placed at the bottom so the content above is rendered first
         // in order to capture the image
@@ -588,22 +531,18 @@ private fun ContentNode.Render(
         when (val node = this@Render) {
             is ContentNode.Error -> node.RenderError()
             is ContentNode.Line.Heading -> node.RenderHeading()
-            is ContentNode.Line.Link -> node.RenderLink(
-                onLongClick = {
-                    events.tryEmit(CreateTab(node.url))
-                },
-                onClick = {
-                    events.tryEmit(LoadPage(node.url))
-                }
-            )
+            is ContentNode.Line.Link -> node.RenderLink(onLongClick = {
+                events.tryEmit(CreateTab(node.url))
+            }, onClick = {
+                events.tryEmit(LoadPage(node.url))
+            })
 
             is ContentNode.Line -> Text(node.raw)
             is ContentNode.Image -> {
                 Column {
                     Text(node.type)
                     AsyncImage(
-                        model = ImageRequest.Builder(LocalPlatformContext.current)
-                            .data(node.raw)
+                        model = ImageRequest.Builder(LocalPlatformContext.current).data(node.raw)
                             .build(),
                         onSuccess = {
                             recapture()
@@ -624,16 +563,14 @@ private fun ContentNode.Render(
 @Composable
 private fun ContentNode.InternalError.RenderError() {
     Text(
-        message,
-        color = MaterialTheme.colorScheme.error
+        message, color = MaterialTheme.colorScheme.error
     )
 }
 
 @Composable
 private fun ContentNode.Error.RenderError() {
     Text(
-        message,
-        color = MaterialTheme.colorScheme.error
+        message, color = MaterialTheme.colorScheme.error
     )
 }
 
@@ -658,18 +595,12 @@ private fun ContentNode.Line.Heading.RenderHeading() {
 
 @Composable
 private fun ContentNode.Line.Link.RenderLink(
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    modifier: Modifier = Modifier
+    onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier.combinedClickable(
-            onLongClick = onLongClick,
-            onClick = onClick
-        )
-            .minimumInteractiveComponentSize()
-            .fillMaxWidth()
-            .padding(ButtonDefaults.ContentPadding),
+            onLongClick = onLongClick, onClick = onClick
+        ).minimumInteractiveComponentSize().fillMaxWidth().padding(ButtonDefaults.ContentPadding),
     ) {
         Text(
             this@RenderLink.name,

@@ -90,7 +90,7 @@ private fun createTofuTrustManager(
         override fun checkServerTrusted(chain: Array<out X509Certificate>, authType: String) {
             logcat { "checking server trust $host:$port chain = ${chain.size}" }
             val cert = chain.getOrNull(0)
-                ?:throw CertificateException("no certificate found for $host:$port")
+                ?: throw CertificateException("no certificate found for $host:$port")
 
             val fingerprint = cert.sha256PublicKeyFingerprint()
             val storedFingerprint = loadStoredFingerprint()
@@ -131,12 +131,12 @@ class KtorSocketFactory(
             }
 
         val readChannel = socket.openReadChannel()
-        val writeChannel = socket.openWriteChannel()
+        val writeChannel = socket.openWriteChannel(autoFlush = true)
 
         return object : SecureSocket {
-            override suspend fun read(buffer: Buffer): Int {
-                return readChannel.readBuffer().use {
-                    it.readAvailable(buffer)
+            override suspend fun readUntilEOF(buffer: Buffer): Int {
+                return readChannel.readBuffer().use { rc ->
+                    rc.readAvailable(buffer)
                 }
             }
 
@@ -144,13 +144,7 @@ class KtorSocketFactory(
                 writeChannel.writeString(data)
             }
 
-            override suspend fun flush() {
-                writeChannel.flush()
-            }
-
-            override fun close() {
-                socket.close()
-            }
+            override fun close() = socket.close()
         }
     }
 }

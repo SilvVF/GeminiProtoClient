@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import ios.silv.logcat.asLog
 import ios.silv.logcat.logcat
+import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,19 +36,6 @@ enum class Theme {
     Dark,
     System
 }
-
-/*
-    val appTheme by preferenceStateFlow(Keys.appTheme, AppTheme.Default) {
-        AppTheme.entries.getOrNull(it) ?: AppTheme.Default
-    }
-    val theme by preferenceStateFlow(Keys.darkMode, Theme.System) {
-        Theme.entries.getOrNull(it) ?: Theme.System
-    }
-    val incognito by preferenceStateFlow(Keys.incognito, true)
-    val recentlyViewed by preferenceStateFlow(Keys.recentlyViewed, emptySet())
-    val bookmarked by preferenceStateFlow(Keys.bookmarked, emptySet())
- */
-
 
 class Settings(
     dataStore: DataStore<Preferences>
@@ -87,8 +75,7 @@ abstract class SettingsStore(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val store = dataStore
 
-    @Volatile
-    var initialized = false
+    var initialized by atomic(false)
 
     private val initialValues: Preferences by lazy {
         runBlocking { store.data.first() }
@@ -105,11 +92,13 @@ abstract class SettingsStore(
 
     suspend fun edit(
         transform: suspend (MutablePreferences) -> Unit
-    ) {
-        try {
+    ): Boolean {
+        return try {
             store.edit(transform)
+            true
         } catch (e: Exception) {
             logcat { e.asLog() }
+            false
         }
     }
 

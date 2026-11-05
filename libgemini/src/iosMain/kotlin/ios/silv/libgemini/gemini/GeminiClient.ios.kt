@@ -52,7 +52,7 @@ class IosSocketFactory(
         logcat { "${url.port} ${url.host}" }
 
         return object : SecureSocket {
-            override suspend fun read(buffer: Buffer): Int {
+            override suspend fun readUntilEOF(buffer: Buffer): Int {
                 var bytes = 0
                 loop@ while (true) {
                     when (val r = socket.read(Duration.INFINITE)) {
@@ -78,8 +78,6 @@ class IosSocketFactory(
                 buffer.writeString(data)
                 socket.write(buffer.copyToPlatformBuffer(), socket.writePolicy.toDeadline())
             }
-
-            override suspend fun flush() = Unit
 
             override fun close() = socket.close()
         }

@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.Source
+import kotlinx.io.readByteArray
 import okio.ByteString.Companion.encodeUtf8
 import okio.FileSystem
 import okio.Path
@@ -140,15 +141,7 @@ class GeminiCache(
             source.use { src ->
                 fileSystem.sink(path).buffer().use { sink ->
                     sink.writeUtf8(header.removeSuffix("\r\n") + "\r\n")
-
-                    val buffer = ByteArray(8192)
-
-                    while (true) {
-                        val read = src.readAtMostTo(buffer, 0, buffer.size)
-                        if (read == -1) break
-
-                        sink.write(buffer, 0, read)
-                    }
+                    sink.write(src.readByteArray())
                 }
             }
 
@@ -157,8 +150,9 @@ class GeminiCache(
             queue.remove(path.name)
             queue.add(path.name)
 
-            val updatedSize = (fileSystem.metadata(path).size ?: 0L)
-            bytes += updatedSize - oldSize
+            val newSize = (fileSystem.metadata(path).size ?: 0L)
+            bytes += newSize - oldSize
+            logcat { "updating cache size updatedSize=$newSize - $oldSize, cacheSizeBytes= = $bytes" }
 
             cleanupIfNeeded()
             logcat { "wrote response to cache path: $path \n url: $url" }

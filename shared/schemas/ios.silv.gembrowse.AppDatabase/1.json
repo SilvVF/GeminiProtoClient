@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "48ed841669ca7ae6ca3675ac8007d4c9",
+    "identityHash": "a84224bf53529d14a36c2d92a1bf816b",
     "entities": [
       {
         "tableName": "page",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `tabId` INTEGER NOT NULL, `url` TEXT NOT NULL, `prevPageId` INTEGER, FOREIGN KEY(`prevPageId`) REFERENCES `page`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`tabId`) REFERENCES `tab`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `tabId` INTEGER NOT NULL, `position` INTEGER NOT NULL, `url` TEXT NOT NULL, `resolvedUrl` TEXT, `title` TEXT, `scrollY` INTEGER NOT NULL, `visitedAt` INTEGER NOT NULL, FOREIGN KEY(`tabId`) REFERENCES `tab`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -21,15 +21,38 @@
             "notNull": true
           },
           {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
             "fieldPath": "url",
             "columnName": "url",
             "affinity": "TEXT",
             "notNull": true
           },
           {
-            "fieldPath": "prevPageId",
-            "columnName": "prevPageId",
-            "affinity": "INTEGER"
+            "fieldPath": "resolvedUrl",
+            "columnName": "resolvedUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "scrollY",
+            "columnName": "scrollY",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "visitedAt",
+            "columnName": "visitedAt",
+            "affinity": "INTEGER",
+            "notNull": true
           }
         ],
         "primaryKey": {
@@ -40,36 +63,17 @@
         },
         "indices": [
           {
-            "name": "index_page_tabId",
-            "unique": false,
+            "name": "index_page_tabId_position",
+            "unique": true,
             "columnNames": [
-              "tabId"
+              "tabId",
+              "position"
             ],
             "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_page_tabId` ON `${TABLE_NAME}` (`tabId`)"
-          },
-          {
-            "name": "index_page_prevPageId",
-            "unique": false,
-            "columnNames": [
-              "prevPageId"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_page_prevPageId` ON `${TABLE_NAME}` (`prevPageId`)"
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_page_tabId_position` ON `${TABLE_NAME}` (`tabId`, `position`)"
           }
         ],
         "foreignKeys": [
-          {
-            "table": "page",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "prevPageId"
-            ],
-            "referencedColumns": [
-              "id"
-            ]
-          },
           {
             "table": "tab",
             "onDelete": "CASCADE",
@@ -85,7 +89,7 @@
       },
       {
         "tableName": "tab",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `activePageId` INTEGER, `prevImageUpdatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `currentPosition` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `lastAccessedAt` INTEGER NOT NULL, `thumbnailUpdatedAt` INTEGER)",
         "fields": [
           {
             "fieldPath": "id",
@@ -94,19 +98,37 @@
             "notNull": true
           },
           {
-            "fieldPath": "activePageId",
-            "columnName": "activePageId",
-            "affinity": "INTEGER"
-          },
-          {
-            "fieldPath": "prevImageUpdatedAt",
-            "columnName": "prevImageUpdatedAt",
+            "fieldPath": "currentPosition",
+            "columnName": "currentPosition",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sortOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastAccessedAt",
+            "columnName": "lastAccessedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "thumbnailUpdatedAt",
+            "columnName": "thumbnailUpdatedAt",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
-          "autoGenerate": false,
+          "autoGenerate": true,
           "columnNames": [
             "id"
           ]
@@ -115,7 +137,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '48ed841669ca7ae6ca3675ac8007d4c9')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a84224bf53529d14a36c2d92a1bf816b')"
     ]
   }
 }

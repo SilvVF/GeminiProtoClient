@@ -11,7 +11,6 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 import androidx.navigation3.runtime.NavKey
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -30,7 +29,7 @@ data object SettingsRoute : Route
 data object HomeRoute : Route
 
 @Serializable
-data class TabRoute(val id: Int) : Route
+data class TabRoute(val id: Long) : Route
 
 @Composable
 inline fun <reified Item : Any> rememberStateStack(
@@ -49,9 +48,8 @@ public class SnapshotStateStackSerializer<T>(elementSerializer: KSerializer<T>) 
 
     private val base = ListSerializer(elementSerializer)
 
-    @OptIn(ExperimentalSerializationApi::class)
     override val descriptor: SerialDescriptor =
-        SerialDescriptor("androidx.compose.runtime.SnapshotStateList", base.descriptor)
+        SerialDescriptor("ios.silv.gembrowse.SnapshotStateStack", base.descriptor)
 
     override fun serialize(encoder: Encoder, value: SnapshotStateStack<T>) {
         encoder.encodeSerializableValue(base, value.items)

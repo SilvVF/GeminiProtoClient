@@ -16,6 +16,7 @@ expect fun getPlatform(): Platform
 
 
 /** Marks dependency injection system accessors, so direct access must be explicitly opted in. */
+@Suppress("ExperimentalAnnotationRetention")
 @MustBeDocumented
 @RequiresOptIn(
     message = "Direct access to the DI causes tight coupling. If possible, use constructor injection or parameters.",
@@ -49,5 +50,7 @@ abstract class CommonDependencies {
     val settingsStore by lazy { Settings(dataStore) }
 
     val database by lazy { getRoomDatabase(builder) }
-    val combinedDao by lazy { database.getCombinedDao() }
+
+    val tabDao by lazy { database.getTabDao() }
+    val pageDao by lazy { database.getPageDao() }
 }

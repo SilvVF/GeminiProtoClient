@@ -25,10 +25,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.retain.retain
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -36,10 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
-import androidx.room3.withWriteTransaction
 import ios.silv.logcat.logcat
-import kotlinx.coroutines.CoroutineScope
-import kotlin.math.log
 
 data class HomeUiState(
     val incognito: Boolean = false,
@@ -57,8 +52,7 @@ sealed interface HomeEvent {
 fun homePresenter(
     backStack: SnapshotStateStack<Route>,
     events: EventFlow<HomeEvent>,
-    database: AppDatabase = commonDeps.database,
-    dao: CombinedDao = commonDeps.combinedDao,
+    db: AppDatabase = commonDeps.database,
     settings: Settings = commonDeps.settingsStore,
 ): HomeUiState {
     var incognito by retain { mutableStateOf(false) }
@@ -70,7 +64,7 @@ fun homePresenter(
         when (event) {
             is HomeEvent.CreateTab -> {
                 logcat { "creating tab" }
-                val tab = database.createTab(event.url)
+                val tab = db.createTab(event.url)
                 requireNotNull(tab)
                 logcat { "created $tab" }
                 backStack.push(TabRoute(tab.id))
@@ -86,7 +80,6 @@ fun homePresenter(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeContent(
     eventsFlow: EventFlow<HomeEvent>,

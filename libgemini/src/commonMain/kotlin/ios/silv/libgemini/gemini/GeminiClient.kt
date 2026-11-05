@@ -5,24 +5,12 @@ import androidx.datastore.core.Storage
 import androidx.datastore.preferences.core.Preferences
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
-import io.ktor.http.set
+import io.ktor.http.takeFrom
 import io.ktor.network.selector.SelectorManager
-import io.ktor.network.sockets.Socket
-import io.ktor.network.sockets.aSocket
-import io.ktor.network.sockets.openReadChannel
-import io.ktor.network.sockets.openWriteChannel
-import io.ktor.network.tls.TLSConfigBuilder
-import io.ktor.network.tls.tls
-import io.ktor.util.Platform
-import io.ktor.util.PlatformUtils
-import io.ktor.utils.io.core.readAvailable
-import io.ktor.utils.io.flushIfNeeded
-import io.ktor.utils.io.readBuffer
-import io.ktor.utils.io.readRemaining
-import io.ktor.utils.io.writeString
 import ios.silv.logcat.LogPriority.ERROR
+import ios.silv.logcat.asLog
 import ios.silv.logcat.logcat
-import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
@@ -33,14 +21,22 @@ import kotlinx.io.Source
 import kotlinx.io.readLineStrict
 import okio.buffer
 import okio.use
-import kotlin.coroutines.CoroutineContext
 
 internal const val URLMaxLength = 1024
 internal const val MetaMaxLength = 1024
 
 internal const val CACHE_SIZE_BYTES = 1024 * 1024 * 150L
 
-data class Response(
+class TooManyRedirectsException(val max: Int) : IOException("redirected more than $max times")
+class RedirectLoopException(val url: Url) : IOException("redirect loop at $url")
+class UnsupportedSchemeException(val url: Url) :
+    IOException("unsupported protocol ${url.protocol.name}")
+
+class UrlTooLongException(val length: Int) : IOException("url is too long $length > $URLMaxLength")
+
+class Response(
+    val url: Url,
+    val finalUrl: Url,
     val status: Int,
     val meta: String,
     val body: Source,
@@ -51,22 +47,20 @@ data class Response(
     }
 }
 
-
 internal data class Header(
     val status: Int,
     val meta: String,
 )
 
-private fun consumeHeaderInternal(line: String): Header {
-    val fields = line.split(" ")
-    if (fields.size < 2) {
+private fun consumeHeader(line: String): Header {
+    val status = line.take(2).toIntOrNull() ?: error("Unexpected status value in header")
+    if (line.length > 2 && line[2] != ' ') {
         error("Header not formatted correctly")
     }
 
-    val status = fields[0].toIntOrNull() ?: error("Unexpected status value ${fields[0]}")
-    val meta = if (line.length <= 3) "" else line.substring(fields[0].length + 1)
+    val meta = line.drop(3)
 
-    if (meta.length > MetaMaxLength) {
+    if (meta.encodeToByteArray().size > MetaMaxLength) {
         error("Meta string is too long")
     }
 
@@ -76,23 +70,21 @@ private fun consumeHeaderInternal(line: String): Header {
 @Throws(IOException::class)
 internal fun consumeHeaderOkio(source: okio.BufferedSource): Result<Header> = runCatching {
     val line = source.readUtf8LineStrict(4096)
-    consumeHeaderInternal(line)
+    consumeHeader(line)
 }
 
 @Throws(IOException::class)
-internal fun consumeHeader(source: Source): Result<Header> = runCatching {
+internal fun consumeHeaderKotlinIO(source: Source): Result<Header> = runCatching {
     val line = source.readLineStrict(4096)
-    consumeHeaderInternal(line)
+    consumeHeader(line)
 }
 
 data class ClientConfig(
-    val dispatcher: CoroutineContext =
-        Dispatchers.IO +
-                SupervisorJob() +
-                CoroutineName("GeminiClientScope"),
-    val selector: SelectorManager = SelectorManager(dispatcher),
+    val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    val selector: SelectorManager = SelectorManager(dispatcher + SupervisorJob()),
     val maxRedirects: Int = 5
 )
+
 
 internal expect fun createSocket(
     selector: SelectorManager,
@@ -100,10 +92,9 @@ internal expect fun createSocket(
     store: DataStore<Preferences>
 ): SocketFactory
 
-interface SecureSocket: AutoCloseable {
-    suspend fun read(buffer: Buffer): Int
+interface SecureSocket : AutoCloseable {
+    suspend fun readUntilEOF(buffer: Buffer): Int
     suspend fun write(data: String)
-    suspend fun flush()
     override fun close()
 }
 
@@ -122,183 +113,155 @@ class GeminiClient(
     private val store: DataStore<Preferences> = createDataStore(storage)
     private val selector = config.selector
 
+    private sealed interface Hop {
+        data class Done(val response: Response) : Hop
+        data class Redirect(val target: Url) : Hop
+    }
+
+    private fun normalize(input: Url): Url = URLBuilder(input).apply {
+        fragment = ""
+        user = null
+        password = null
+        if (input.port == 0) port = 1965
+    }.build()
+
+    private fun resolve(base: Url, ref: String): Url =
+        normalize(URLBuilder(base).takeFrom(ref.trim()).build())
+
+    private suspend fun openNewConnection(
+        url: Url,
+    ): SecureSocket = createSocket(selector, url, store).connect(url)
+
     suspend fun makeGeminiQuery(
         query: String,
         forceNetwork: Boolean = false,
         cacheEnabled: Boolean = true
-    ): Result<Response> {
-        return withContext(config.dispatcher) {
-            fetch(
-                url = Url(query),
-                forceNetwork,
-                cacheEnabled,
-                redirected = 0
-            )
+    ): Result<Response> = suspendRunCatching {
+        // Url(query) can throw, so it must be inside the runCatching
+        val origin = normalize(Url(query))
+        withContext(config.dispatcher) {
+            follow(origin, forceNetwork, cacheEnabled)
         }
     }
 
-    private suspend fun readResponseFromCache(
-        path: okio.Path,
-        redirected: Int,
+    /** Iterative redirect loop: one hop at a time, one open socket at a time. */
+    private suspend fun follow(
+        origin: Url,
+        forceNetwork: Boolean,
         cacheEnabled: Boolean
-    ): Result<Response> {
-        return suspendRunCatching {
-            logcat { path.toString() }
-            fileSystem.source(path).buffer().use { source ->
+    ): Response {
+        val seen = mutableSetOf<String>()
+        var current = origin
 
+        // first request + up to maxRedirects redirects
+        repeat(config.maxRedirects + 1) {
+            if (!seen.add(current.toString())) throw RedirectLoopException(current)
+
+            when (val hop = fetchOnce(origin, current, forceNetwork, cacheEnabled)) {
+                is Hop.Done -> return hop.response
+                is Hop.Redirect -> current = hop.target
+            }
+        }
+        throw TooManyRedirectsException(config.maxRedirects)
+    }
+
+    private suspend fun fetchOnce(
+        origin: Url,
+        url: Url,
+        forceNetwork: Boolean,
+        cacheEnabled: Boolean
+    ): Hop {
+        val urlLength = url.toString().length
+        if (urlLength > URLMaxLength) throw UrlTooLongException(urlLength)
+        if (url.protocol.name != "gemini") throw UnsupportedSchemeException(url)
+
+        if (!forceNetwork && cacheEnabled) {
+            logcat { "reading from cache \n\t origin: $origin \n\t url: $url \n\t" }
+            readFromCache(origin, url)?.let { return it }
+        }
+
+        logcat { "Trying to connect to ${url.host}:${url.port} - $url" }
+
+        val (header, buffer) = openNewConnection(url).use { conn ->
+            conn.write("$url\r\n")
+            val buffer = Buffer()
+            conn.readUntilEOF(buffer)
+            consumeHeaderKotlinIO(buffer).getOrThrow() to buffer
+        }
+
+        return when (header.status) {
+            GeminiCode.REDIRECT_PERMANENT,
+            GeminiCode.REDIRECT_TEMPORARY -> {
+                val target = resolve(url, header.meta)
+
+                if (target.protocol.name != "gemini") {
+                    // Don't swallow cross-protocol redirects: hand the target to the UI
+                    // (open externally / ask the user) as a normal 3x response.
+                    return Hop.Done(
+                        Response(
+                            origin,
+                            url,
+                            header.status,
+                            target.toString(),
+                            Buffer()
+                        )
+                    )
+                }
+
+                if (cacheEnabled && header.status == GeminiCode.REDIRECT_PERMANENT) {
+                    cache.cacheResponse(
+                        url = url.toString(),
+                        header = "${header.status} ${header.meta}\r\n",
+                        source = Buffer()
+                    )
+                }
+                Hop.Redirect(target)
+            }
+
+            else -> {
+                if (cacheEnabled && header.status == GeminiCode.SUCCESS) {
+                    cache.cacheResponse(
+                        url = url.toString(),
+                        header = "${header.status} ${header.meta}\r\n",
+                        source = buffer.copy()
+                    )
+                }
+                Hop.Done(Response(origin, url, header.status, header.meta, buffer))
+            }
+        }
+    }
+
+    /** Returns null on miss or on a corrupt entry (which is deleted). Never recurses into fetch. */
+    private suspend fun readFromCache(origin: Url, url: Url): Hop? {
+        val path = cache.getResponse(url.toString()) ?: return null
+
+        return suspendRunCatching {
+            fileSystem.source(path).buffer().use { source ->
                 val header = consumeHeaderOkio(source).getOrThrow()
 
                 if (header.status == GeminiCode.REDIRECT_PERMANENT) {
-                    return@suspendRunCatching fetch(
-                        Url(header.meta),
-                        false,
-                        cacheEnabled,
-                        redirected = (redirected + 1)
+                    return@use Hop.Redirect(resolve(url, header.meta))
+                }
+
+                // an empty body is a valid response (empty gemtext), don't treat it as corrupt
+                val body = Buffer().apply {
+                    write(source.readByteArray())
+                }
+                Hop.Done(
+                    Response(
+                        url = origin,
+                        finalUrl = url,
+                        header.status,
+                        header.meta, body
                     )
-                        .getOrThrow()
-                }
-
-                if (source.exhausted()) {
-                    error("empty buffer")
-                }
-
-                val buffer = Buffer()
-                val chunk = ByteArray(8192)
-
-                while (true) {
-                    val read = source.read(chunk, 0, chunk.size)
-                    if (read == -1) break
-
-                    buffer.write(chunk, 0, read)
-                }
-                Response(
-                    status = header.status,
-                    meta = header.meta,
-                    body = buffer
                 )
             }
         }
-    }
-
-    private suspend fun openNewConnection(
-        url: Url,
-    ): SecureSocket {
-        val socket = createSocket(selector, url, store)
-        return socket.connect(url)
-    }
-
-    private suspend fun fetch(
-        url: Url,
-        forceNetwork: Boolean,
-        cacheEnabled: Boolean,
-        redirected: Int
-    ): Result<Response> {
-        return suspendRunCatching {
-            val urlBuilder = URLBuilder(url)
-            val urlLength = url.toString().length
-
-            if (urlLength > URLMaxLength) {
-                error("url is too long $urlLength > $URLMaxLength")
+            .onFailure {
+                logcat(ERROR) { "failed to read cache entry for $url ${it.asLog()}" }
+                cache.deleteResponse(url.toString())
             }
-
-            if (url.protocol.name != "gemini") {
-                error("unsupported protocol ${url.protocol.name}")
-            }
-
-            if (url.port == 0) {
-                urlBuilder.set {
-                    port = 1965
-                }
-            }
-
-            val url = urlBuilder.build()
-
-            if (!forceNetwork) {
-                logcat { "looking in cache for $url" }
-                cache.getResponse(url.toString())?.let { cached ->
-                    logcat { "Found entry in cache for $url" }
-                    readResponseFromCache(cached, redirected, cacheEnabled)
-                        .onSuccess { response ->
-                            logcat { "successfully read from cache from $url" }
-                            return@suspendRunCatching response
-                        }
-                        .onFailure {
-                            cache.deleteResponse("$url")
-                            logcat(ERROR) { "failed to parse cache entry for $url ${it.message}" }
-                        }
-                } ?: logcat { "unable to find response in cache" }
-            }
-
-            logcat { "Trying to connect to ${url.host}:${url.port} - $url" }
-
-            openNewConnection(url).use { conn ->
-
-                conn.write("${url}\r\n")
-
-                val buffer = Buffer()
-
-                conn.read(buffer)
-                val header = consumeHeader(buffer).getOrThrow()
-
-                when (header.status) {
-                    GeminiCode.REDIRECT_PERMANENT,
-                    GeminiCode.REDIRECT_TEMPORARY -> {
-                        handleRedirect(
-                            header,
-                            redirected,
-                            url,
-                            forceNetwork,
-                            cacheEnabled
-                        )
-                    }
-
-                    else -> {
-                        if (header.status == GeminiCode.SUCCESS) {
-                            logcat { "writing response to cache url: $url header: $header" }
-                            cache.cacheResponse(
-                                url = url.toString(),
-                                header = "${header.status} ${header.meta}\r\n",
-                                source = buffer.copy()
-                            )
-                        }
-
-                        Response(
-                            status = header.status,
-                            meta = header.meta,
-                            body = buffer
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private suspend fun handleRedirect(
-        header: Header,
-        redirected: Int,
-        url: Url,
-        forceNetwork: Boolean,
-        cacheEnabled: Boolean,
-    ): Response {
-        if (redirected > config.maxRedirects) {
-            error("client was redirected $redirected times > max ${config.maxRedirects}")
-        }
-
-        if (header.status == GeminiCode.REDIRECT_PERMANENT) {
-            cache.cacheResponse(
-                url = url.toString(),
-                header = "${header.status} ${header.meta}\r\n",
-                source = Buffer()
-            )
-        }
-
-        return fetch(
-            Url(header.meta),
-            forceNetwork,
-            cacheEnabled,
-            (redirected + 1)
-        )
-            .getOrThrow()
+            .getOrNull()
     }
 }
 
