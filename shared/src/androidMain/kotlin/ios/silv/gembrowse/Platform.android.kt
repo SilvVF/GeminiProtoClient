@@ -8,6 +8,8 @@ import androidx.room3.Room
 import androidx.room3.RoomDatabase
 import ios.silv.libgemini.gemini.AndroidGeminiClient
 import ios.silv.libgemini.gemini.GeminiClient
+import okio.FileSystem
+import okio.Path.Companion.toOkioPath
 
 class AndroidPlatform : Platform {
     override val name: String = "Android ${Build.VERSION.SDK_INT}"
@@ -22,7 +24,10 @@ fun buildCommonDeps(context: Context): CommonDependencies {
         override val dataStore: DataStore<Preferences> = createDataStore(
             producePath = { context.filesDir.resolve(it).absolutePath }
         )
-        override val previewCache: PreviewCache = AndroidPreviewCache(context)
+        override val previewCache: PreviewCache = CommonPreviewCache(
+            fs = FileSystem.SYSTEM,
+            cacheDir = context.cacheDir.toOkioPath()
+        )
     }
 }
 

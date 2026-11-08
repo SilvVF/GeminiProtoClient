@@ -1,3 +1,4 @@
+import org.jetbrains.kotlin.compose.compiler.gradle.ComposeFeatureFlag
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -10,6 +11,7 @@ plugins {
     kotlin("plugin.serialization")
 }
 
+
 kotlin {
     listOf(
         iosArm64(),
@@ -19,6 +21,16 @@ kotlin {
             baseName = "Shared"
             isStatic = true
         }
+    }
+
+    composeCompiler {
+        stabilityConfigurationFiles.add(
+            rootProject.layout.projectDirectory.file("compose_stability.conf")
+        )
+
+        // Optional: see what the compiler decided
+        reportsDestination = layout.buildDirectory.dir("compose_reports")
+        metricsDestination = layout.buildDirectory.dir("compose_metrics")
     }
 
     android {
@@ -50,6 +62,7 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.material3)
             implementation(libs.compose.ui)
+            implementation(libs.compose.ui.graphics)
             implementation(libs.compose.components.resources)
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
@@ -65,11 +78,22 @@ kotlin {
             implementation(libs.jetbrains.lifecycle.viewmodelNavigation3)
 
             implementation(libs.androidx.room3.runtime)
-            implementation(libs.androidx.sqlite.bundled)
+            implementation(libs.androidx.room3.paging)
+            implementation(libs.androidx.sqlite.bundled
+            )
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor3)
+
             implementation(libs.reorderable)
             implementation(libs.material.icons.extended)
+
+            val paging_version = "3.5.3"
+
+            implementation("androidx.paging:paging-runtime:$paging_version")
+            // optional - Jetpack Compose integration
+            implementation("androidx.paging:paging-compose:3.5.3")
+
+            implementation(libs.kotlinx.datetime)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

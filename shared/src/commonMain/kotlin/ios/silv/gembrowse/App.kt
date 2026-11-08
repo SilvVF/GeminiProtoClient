@@ -4,18 +4,9 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.retain.retain
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -29,7 +20,6 @@ import androidx.navigation3.ui.NavDisplay
 import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.request.crossfade
-import kotlinx.coroutines.CoroutineScope
 
 @ExperimentalMaterial3Api
 @Composable
@@ -43,11 +33,11 @@ fun App() {
 
     val stack = rememberStateStack<Route>(listOf(HomeRoute), 1)
 
-    val events = rememberEventFlow<SettingsEvent>()
-    val state = settingsPresenter(events, stack)
+    val settingsEvents = rememberEventFlow<SettingsEvent>()
+    val settingsState = settingsPresenter(settingsEvents, stack)
 
     MaterialTheme(
-        colorScheme = when(state.theme) {
+        colorScheme = when(settingsState.theme) {
             Theme.Light -> lightColorScheme()
             Theme.Dark -> darkColorScheme()
             Theme.System -> if(isSystemInDarkTheme()) {
@@ -68,8 +58,13 @@ fun App() {
                 SearchBarSceneStrategy(stack)
             ),
             entryProvider = entryProvider {
+                entry<HistoryRoute> {
+                    val events = rememberEventFlow<HistoryEvent>()
+                    val state = historyPresenter(stack, events)
+                    HistoryScreen(state, events, stack)
+                }
                 entry<SettingsRoute> {
-                    SettingsContent(state, events)
+                    SettingsContent(settingsState, settingsEvents)
                 }
                 entry<HomeRoute>(
                     metadata = mapOf(SearchBarSceneStrategy.BOTTOM_BAR_KEY to true)

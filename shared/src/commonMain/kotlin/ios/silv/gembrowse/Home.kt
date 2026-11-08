@@ -12,6 +12,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -35,6 +36,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
 import ios.silv.logcat.logcat
+import kotlinx.coroutines.flow.map
+import kotlin.collections.emptyList
 
 data class HomeUiState(
     val incognito: Boolean = false,
@@ -53,30 +56,38 @@ fun homePresenter(
     backStack: SnapshotStateStack<Route>,
     events: EventFlow<HomeEvent>,
     db: AppDatabase = commonDeps.database,
+    historyDao: HistoryDao = commonDeps.historyDao,
+    bookmarkDao: BookmarkDao = commonDeps.bookmarkDao,
     settings: Settings = commonDeps.settingsStore,
 ): HomeUiState {
     var incognito by retain { mutableStateOf(false) }
 
-    val recentlyViewed by settings.recentlyViewed.collectAsRetainedState()
-    val bookmarked by settings.bookmarked.collectAsRetainedState()
+    val recent by produceRetainedState(emptyList(), historyDao) {
+        historyDao.observeRecent(10).collect { entities -> value = entities.map { it.url } }
+    }
+
+    val bookmarked by produceRetainedState(emptyList(), bookmarkDao) {
+        bookmarkDao.observeAll().collect { bookmarked ->
+            value = bookmarked.map { it.url }
+        }
+    }
 
     EventEffect(events) { event ->
         when (event) {
             is HomeEvent.CreateTab -> {
-                logcat { "creating tab" }
                 val tab = db.createTab(event.url)
                 requireNotNull(tab)
-                logcat { "created $tab" }
                 backStack.push(TabRoute(tab.id))
             }
+
             HomeEvent.ToggleIncognito -> incognito = !incognito
         }
     }
 
     return HomeUiState(
         incognito = incognito,
-        recentlyViewed = recentlyViewed.toList(),
-        bookmarked = bookmarked.toList()
+        recentlyViewed = recent,
+        bookmarked = bookmarked
     )
 }
 
@@ -254,6 +265,22 @@ private fun HomeTopAppBar(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Lock,
+                    contentDescription = null,
+                )
+            }
+            TerminalSectionButton(
+                modifier = Modifier
+                    .padding(start = 4.dp),
+                containerColor = containerColor,
+                label = {
+                    TerminalSectionDefaults.Label("history", color = containerColor)
+                },
+                onClick = {
+                    backStack.push(HistoryRoute)
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.History,
                     contentDescription = null,
                 )
             }

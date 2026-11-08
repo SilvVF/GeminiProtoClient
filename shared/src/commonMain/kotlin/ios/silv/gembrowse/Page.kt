@@ -58,7 +58,6 @@ import androidx.compose.ui.unit.dp
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
-import androidx.room3.withWriteTransaction
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
@@ -68,6 +67,7 @@ import ios.silv.libgemini.gemini.ContentNode
 import ios.silv.libgemini.gemini.GeminiClient
 import ios.silv.libgemini.gemini.GeminiCode
 import ios.silv.libgemini.gemini.GeminiParser
+import ios.silv.libgemini.gemini.onFailureLog
 import ios.silv.libgemini.gemini.suspendRunCatching
 import ios.silv.logcat.asLog
 import ios.silv.logcat.logcat
@@ -83,20 +83,21 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlin.collections.orEmpty
 import kotlin.collections.take
+import kotlin.reflect.KClass
 import kotlin.time.Duration.Companion.seconds
 
 private suspend fun GeminiClient.loadPage(
     activePage: PageEntity,
-    fetchId: Int
+    forceNetwork: Boolean
 ): PageLoad {
-    return makeGeminiQuery(query = activePage.url, forceNetwork = fetchId > 0).fold(onSuccess = {
+    return makeGeminiQuery(query = activePage.url, forceNetwork = forceNetwork).fold(onSuccess = {
         logcat { "res ${it.status}" }
         if (it.status == GeminiCode.INPUT) {
-            PageLoad.Ready.Input(activePage, "enter input")
+            PageLoad.Ready.Done.Input(activePage, "enter input")
         } else {
             val nodes = GeminiParser.parse(activePage.baseUrl, it).map(::UiNode).toList()
 
-            PageLoad.Ready.Content(
+            PageLoad.Ready.Done.Content(
                 activePage, nodes
             )
         }
@@ -104,19 +105,6 @@ private suspend fun GeminiClient.loadPage(
         logcat { it.asLog() }
         PageLoad.Error(it.message.orEmpty())
     })
-}
-
-private suspend fun Settings.addPageToRecentlyViewed(page: PageLoad) = suspendRunCatching {
-    when (page) {
-        is PageLoad.Ready -> edit { prefs ->
-            prefs[Keys.recentlyViewed] = buildSet {
-                add(page.page.baseUrl)
-                addAll(prefs[Keys.recentlyViewed].orEmpty().take(9))
-            }
-        }
-
-        else -> Unit
-    }
 }
 
 @OptIn(DependencyAccessor::class)
@@ -130,59 +118,72 @@ fun pagePresenter(
     db: AppDatabase = commonDeps.database,
     tabDao: TabDao = commonDeps.tabDao,
     pageDao: PageDao = commonDeps.pageDao,
+    historyDao: HistoryDao = commonDeps.historyDao,
     previewCache: PreviewCache = commonDeps.previewCache,
 ): PageState {
 
     var error by retain { mutableStateOf<String?>(null) }
     val active by produceRetainedState<TabState?>(null) {
-        tabDao.observeTabState(tabId).catch { error = "failed to load" }.collect { tabState ->
-            logcat { "tab $tabState" }
-            Snapshot.withMutableSnapshot {
-                if (tabState == null) {
-                    error = "failed to load tab"
-                } else {
-                    value = tabState
-                    error = null
+        tabDao.observeTabState(tabId)
+            .catch { error = "failed to load" }
+            .collect { tabState ->
+                logcat { "tab $tabState" }
+                Snapshot.withMutableSnapshot {
+                    if (tabState == null) {
+                        error = "failed to load tab"
+                        value = null
+                    } else {
+                        value = tabState
+                        error = null
+                    }
                 }
             }
-        }
     }
 
     val waitingForTabState by remember { derivedStateOf { active == null && error == null } }
     var input by retain { mutableStateOf("") }
-    var fetchId by retain { mutableIntStateOf(0) }
-    var refreshing by retain { mutableStateOf(false) }
 
     var page by retain { mutableStateOf<PageLoad>(PageLoad.Idle) }
+    val activePage = active?.page
+    val url = active?.page?.baseUrl
 
-    LaunchedEffect(active, waitingForTabState) {
-        val linksSame = (page != PageLoad.Idle && active?.page?.baseUrl == page.urlOrNull)
-        if (waitingForTabState || linksSame) return@LaunchedEffect
+    var refreshing by retain { mutableStateOf(false) }
+    var refreshCount by retain(url) { mutableIntStateOf(0) }
 
-        fetchId = 0
-        val activePage = active?.page
+    LaunchedEffect(activePage?.id, url, refreshCount) {
+        if (waitingForTabState) return@LaunchedEffect
         if (activePage == null) {
-            page = PageLoad.Error("no active page")
-        } else {
-            page = PageLoad.Ready.Loading(activePage)
-
-            snapshotFlow { fetchId }.collectLatest { id ->
-                refreshing = true
-                try {
-                    page = client.loadPage(activePage, id)
-                    pageDao.updateResolvedUrl(activePage.id, page.urlOrNull)
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    page = PageLoad.Error(e.message.orEmpty())
-                } finally {
-                    refreshing = false
-                }
-            }
+            page = PageLoad.Error("no active page"); return@LaunchedEffect
         }
-    }
 
-    LaunchedEffect(page) {
-        settings.addPageToRecentlyViewed(page)
+        page = PageLoad.Ready.Loading(activePage)
+        refreshing = true
+        try {
+            val result = client.loadPage(activePage, refreshCount > 0)
+            page = result
+
+            if (result is PageLoad.Ready.Done) {
+                suspendRunCatching {
+                    pageDao.updateResolvedUrl(
+                        activePage.id,
+                        resolvedUrl = result.page.resolvedUrl,
+                    )
+                    if (active?.tab?.isIncognito != true) {
+                        db.recordVisitOnce(
+                            activePage.id,
+                            result.page.baseUrl,
+                            result.page.title,
+                        )
+                    }
+                }.onFailureLog()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            page = PageLoad.Error(e.message.orEmpty())
+        } finally {
+            refreshing = false
+        }
     }
 
     EventEffect(events) { event ->
@@ -190,7 +191,7 @@ fun pagePresenter(
             is OnInputChanged -> input = event.input
             Refresh -> {
                 logcat { "refreshing" }
-                fetchId += 1
+                refreshCount += 1
             }
 
             is Submit -> {
@@ -212,6 +213,9 @@ fun pagePresenter(
             is GoBack -> {
                 val page = db.goBack(tabId)
                 logcat { "navigated back to $page" }
+                if (page == null) {
+                    backStack.pop()
+                }
             }
 
             is LoadPage -> {
@@ -230,7 +234,10 @@ fun pagePresenter(
     }
 
     return PageState(
-        tab = active?.tab, page = page, loading = waitingForTabState, error = error
+        tab = active?.tab,
+        page = page,
+        loading = waitingForTabState,
+        error = error
     )
 }
 
@@ -247,7 +254,9 @@ sealed interface PageEvent {
 @Immutable
 @Stable
 data class UiNode(
-    val node: ContentNode, val key: String? = null, val contentType: String = node::class.toString()
+    val node: ContentNode,
+    val key: String? = null,
+    val contentType: KClass<out ContentNode> = node::class
 )
 
 data class PageState(
@@ -263,14 +272,17 @@ sealed interface PageLoad {
 
     sealed class Ready(open val page: PageEntity) : PageLoad {
         data class Loading(override val page: PageEntity) : Ready(page)
-        data class Input(override val page: PageEntity, val query: String) : Ready(page)
-        data class Content(override val page: PageEntity, val nodes: List<UiNode>) : Ready(page)
+
+        sealed class Done(override val page: PageEntity) : Ready(page) {
+            data class Content(override val page: PageEntity, val nodes: List<UiNode>) : Done(page)
+            data class Input(override val page: PageEntity, val query: String) : Done(page)
+        }
     }
 
     data object Idle : PageLoad
     data class Error(val message: String) : PageLoad
 
-    val nodesOrNull get() = (this as? Ready.Content)?.nodes
+    val nodesOrNull get() = (this as? Ready.Done.Content)?.nodes
     val urlOrNull get() = (this as? Ready)?.page?.baseUrl
 }
 
@@ -298,7 +310,8 @@ fun PageContent(
     NavigationBackHandler(
         state = state, onBackCompleted = {
             events.tryEmit(GoBack(pageState.tab))
-        })
+        }
+    )
 
     when (val page = pageState.page) {
         is PageLoad.Error -> {
@@ -313,7 +326,7 @@ fun PageContent(
             }
         }
 
-        is PageLoad.Ready.Input -> {
+        is PageLoad.Ready.Done.Input -> {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 PageInputContent(page, events)
             }
@@ -337,7 +350,7 @@ fun PageContent(
 
 @Composable
 private fun PageInputContent(
-    state: PageLoad.Ready.Input, events: EventFlow<PageEvent>
+    state: PageLoad.Ready.Done.Input, events: EventFlow<PageEvent>
 ) {
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(
@@ -352,7 +365,8 @@ private fun PageInputContent(
                         Icons.Default.Done, contentDescription = null
                     )
                 }
-            })
+            }
+        )
     }
 }
 
@@ -374,15 +388,18 @@ private fun PageReadyContent(
         }
     }
 
-    DraggableNavLayout(navBlock = {
-        NavBlock(
-            listState = listState, state = pageState, events = pageEvents
-        )
-    }, stdOutBlock = {
-        StdOutBlock(
-            pageState, pageEvents, listState
-        )
-    })
+    DraggableNavLayout(
+        navBlock = {
+            NavBlock(
+                listState = listState, state = pageState, events = pageEvents
+            )
+        },
+        stdOutBlock = {
+            StdOutBlock(
+                pageState, pageEvents, listState
+            )
+        }
+    )
 }
 
 @OptIn(FlowPreview::class)
@@ -396,7 +413,8 @@ private fun NavBlock(
     TerminalSection(
         label = {
             TerminalSectionDefaults.Label("nav")
-        }) {
+        }
+    ) {
         val headings by remember(state) {
             derivedStateOf {
                 state.nodesOrNull?.map { it.node }?.filterIsInstance<ContentNode.Line.Heading>()
@@ -430,13 +448,15 @@ private fun NavBlock(
                                 }
                             }
                         }
-                    }, colors = ButtonDefaults.textButtonColors(
+                    },
+                    colors = ButtonDefaults.textButtonColors(
                         containerColor = if (current == node) {
                             MaterialTheme.colorScheme.primaryContainer
                         } else {
                             Color.Unspecified
                         }
-                    ), shape = RectangleShape, modifier = Modifier.fillMaxWidth()
+                    ),
+                    shape = RectangleShape, modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
                         text = node.heading, style = MaterialTheme.typography.labelSmall
@@ -456,6 +476,7 @@ private fun StdOutBlock(
 ) {
     val captureController = rememberCaptureController()
     val controller by rememberUpdatedState(captureController)
+    // used by content image node to update when image is loaded by coil
     var recapId by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
@@ -488,9 +509,11 @@ private fun StdOutBlock(
                     } else {
                         item(key = key, contentType = contentType) {
                             node.Render(
-                                events = events, recapture = {
+                                events = events,
+                                recapture = {
                                     recapId += 1
-                                })
+                                }
+                            )
                         }
                     }
                 }
@@ -508,7 +531,7 @@ private fun StdOutBlock(
         // This must be placed at the bottom so the content above is rendered first
         // in order to capture the image
         LaunchedEffect(pageState, recapId) {
-            if (pageState is PageLoad.Ready.Content) {
+            if (pageState is PageLoad.Ready.Done.Content) {
                 delay(1.seconds)
                 val bitmapAsync = controller.captureAsync()
                 suspendRunCatching {

@@ -1,7 +1,6 @@
 package ios.silv.gembrowse
 
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.window.ComposeUIViewController
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -9,11 +8,9 @@ import androidx.room3.RoomDatabase
 import ios.silv.libgemini.gemini.GeminiClient
 import ios.silv.libgemini.gemini.IOSGeminiClient
 import ios.silv.logcat.IosLogger
-import ios.silv.logcat.LogcatLogger
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
-import okio.Path
+import okio.Path.Companion.toPath
+import platform.Foundation.NSCachesDirectory
 import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSURL
@@ -38,23 +35,16 @@ fun MainViewController() = run {
                 requireNotNull(documentDirectory).path + "/$it"
             }
         )
-        override val previewCache: PreviewCache
-            get() = object : PreviewCache {
-                override val invalidated: Flow<Unit>
-                    get() = emptyFlow()
-
-                override suspend fun write(url: String, bitmap: ImageBitmap): Result<Path> {
-                  return Result.failure(IllegalStateException())
-                }
-
-                override suspend fun read(url: String): Path? {
-                    return null
-                }
-
-                override suspend fun clean(urls: List<String>): Boolean {
-                    return true
-                }
-            }
+        override val previewCache: PreviewCache = CommonPreviewCache(
+            okio.FileSystem.SYSTEM,
+            NSFileManager.defaultManager.URLForDirectory(
+                directory = NSCachesDirectory,
+                inDomain = NSUserDomainMask,
+                appropriateForURL = null,
+                create = false,
+                error = null,
+            )!!.path!!.toPath()
+        )
     }
 
     ComposeUIViewController {

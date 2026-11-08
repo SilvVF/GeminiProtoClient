@@ -3,6 +3,8 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.Storage
 import androidx.datastore.preferences.core.Preferences
+import ios.silv.logcat.asLog
+import ios.silv.logcat.logcat
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -17,6 +19,10 @@ suspend fun <T> suspendRunCatching(block: suspend () -> T): Result<T> =
     } catch (exception: Exception) {
         Result.failure(exception)
     }
+
+fun <T> Result<T>.onFailureLog() = onFailure {
+    logcat { it.asLog() }
+}
 
 // shared/src/commonMain/kotlin/createDataStore.kt
 /**

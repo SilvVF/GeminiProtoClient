@@ -31,6 +31,9 @@ data object HomeRoute : Route
 @Serializable
 data class TabRoute(val id: Long) : Route
 
+@Serializable
+data object HistoryRoute: Route
+
 @Composable
 inline fun <reified Item : Any> rememberStateStack(
     items: List<Item>,

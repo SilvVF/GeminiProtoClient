@@ -36,12 +36,15 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.BottomAppBarDefaults
 import androidx.compose.material3.CardColors
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,6 +59,7 @@ import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxState
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
@@ -72,6 +76,7 @@ import androidx.compose.runtime.retain.retain
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -102,12 +107,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.fastForEach
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
+import ios.silv.vendor.cascadecompose.CascadeColumnScope
+import ios.silv.vendor.cascadecompose.CascadeDropdownMenu
+import ios.silv.vendor.cascadecompose.CascadeState
+import ios.silv.vendor.cascadecompose.rememberCascadeState
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyGridState
@@ -133,14 +149,23 @@ fun searchPresenter(
     events: EventFlow<BarEvent>,
     tabsDao: TabDao = commonDeps.tabDao,
     db: AppDatabase = commonDeps.database,
+    bookmarkDao: BookmarkDao = commonDeps.bookmarkDao,
     previewCache: PreviewCache = commonDeps.previewCache
 ): BarState {
 
     val scope = rememberRetainedCoroutineScope()
     var query by retain { mutableStateOf("") }
 
+    val bookmarkFolders by produceRetainedState(emptyList()) {
+        bookmarkDao.observeFolders().collect { value = it }
+    }
+
     val tabs by produceRetainedState(emptyList()) {
-        tabsDao.observeTabStates().collect { states ->
+        combine(
+            tabsDao.observeTabStates(),
+            previewCache.invalidated.onStart { emit(Unit) },
+            transform = { state, _ -> state }
+        ).collect { states ->
             value = states.map { state ->
                 TabItem(
                     state = state,
@@ -157,12 +182,20 @@ fun searchPresenter(
         }
     }
 
+    val bookmarked by produceRetainedState(false) {
+        snapshotFlow { visibleItem }
+            .mapNotNull { item -> item?.state?.page }
+            .flatMapLatest { item ->
+                bookmarkDao.observeIsBookmarked(item.url)
+            }
+            .collect { value = it }
+    }
+
     val orderedTabs = retain { mutableStateListOf(*tabs.toTypedArray()) }
     LaunchedEffect(tabs) {
         Snapshot.withMutableSnapshot {
             orderedTabs.clear()
             orderedTabs.addAll(tabs)
-            orderedTabs.sortBy { tabItem -> tabItem.state.tab.sortOrder }
         }
     }
 
@@ -209,11 +242,31 @@ fun searchPresenter(
             BarEvent.GoToHome -> {
                 backStack.replaceAll(HomeRoute)
             }
+
+            is BarEvent.BookmarkPage -> {
+                val page = visibleItem?.state?.page
+                if (page != null) {
+                    bookmarkDao.add(
+                        page.url,
+                        page.title,
+                        folderId = event.folderId
+                    )
+                }
+            }
+
+            BarEvent.UnbookmarkPage -> {
+                val page = visibleItem?.state?.page
+                if (page != null) {
+                    bookmarkDao.deleteByUrl(page.url)
+                }
+            }
         }
     }
 
     return BarState(
+        activeItemBookMarked = bookmarked,
         tabs = orderedTabs,
+        folders = bookmarkFolders,
         query = query,
         active = visibleItem,
         showSearchbar = true
@@ -229,12 +282,16 @@ sealed interface BarEvent {
     data object CreateBlankTab : BarEvent
     data class CreateNewPage(val tabId: Long) : BarEvent
     data object GoToHome : BarEvent
+    data class BookmarkPage(val folderId: Long? = null) : BarEvent
+    data object UnbookmarkPage : BarEvent
 }
 
 data class BarState(
     val active: TabItem?,
+    val activeItemBookMarked: Boolean,
     val showSearchbar: Boolean,
     val tabs: List<TabItem> = emptyList(),
+    val folders: List<FolderRow>,
     val query: String = "",
 )
 
@@ -324,7 +381,47 @@ fun BottombarScaffold(
                     } else {
                         BarMode.EDITING
                     }
-                })
+                },
+                cascadeContent = {
+                    if (state.activeItemBookMarked) {
+                        TextButton(
+                            onClick = {
+                                events.tryEmit(BarEvent.UnbookmarkPage)
+                            }
+                        ) {
+                            Text("Remove bookmark")
+                        }
+                    } else {
+                        DropdownMenuItem(
+                            text = {
+                                Row {
+                                    Icon(
+                                        imageVector = Icons.Filled.Bookmark,
+                                        contentDescription = null
+                                    )
+                                    Text("Bookmark Page")
+                                }
+                            },
+                            children = {
+                                DropdownMenuItem(
+                                    text = { Text("Bookmarks") },
+                                    onClick = {
+                                        events.tryEmit(BarEvent.BookmarkPage())
+                                    }
+                                )
+                                state.folders.fastForEach { folder ->
+                                    DropdownMenuItem(
+                                        text = { Text(folder.name) },
+                                        onClick = {
+                                            events.tryEmit(BarEvent.BookmarkPage(folder.id))
+                                        }
+                                    )
+                                }
+                            }
+                        )
+                    }
+                }
+            )
         },
         floatingActionButton = {
             barModeTransition.AnimatedVisibility(
@@ -548,8 +645,10 @@ private fun BottomSearchBar(
     onTextChanged: (String) -> Unit,
     onSearch: (String) -> Unit,
     onHomeClicked: () -> Unit,
+    toggleEditing: () -> Unit,
+    cascadeState: CascadeState = rememberCascadeState(),
+    cascadeContent: @Composable CascadeColumnScope.() -> Unit,
     tabsCount: Int,
-    toggleEditing: () -> Unit
 ) {
     val barBorder by barModeTransition.animateColor {
         if (it == BarMode.SEARCHING) MaterialTheme.colorScheme.primary
@@ -569,15 +668,17 @@ private fun BottomSearchBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             BottomBarContent(
-                barModeTransition,
-                focusRequester,
-                onFocusChanged,
-                searchText,
-                onTextChanged,
-                onHomeClicked,
-                onSearch,
-                tabsCount,
-                toggleEditing
+                barModeTransition = barModeTransition,
+                focusRequester = focusRequester,
+                onFocusChanged = onFocusChanged,
+                searchText = searchText,
+                onTextChanged = onTextChanged,
+                onHomeClicked = onHomeClicked,
+                onSearch = onSearch,
+                tabsCount = tabsCount,
+                toggleEditing = toggleEditing,
+                cascadeContent = cascadeContent,
+                cascadeState = cascadeState
             )
         }
     }
@@ -592,9 +693,12 @@ fun RowScope.BottomBarContent(
     onTextChanged: (String) -> Unit,
     onHomeClicked: () -> Unit,
     onSearch: (String) -> Unit,
-    tabsCount: Int,
-    toggleEditing: () -> Unit
+    toggleEditing: () -> Unit,
+    cascadeState: CascadeState = rememberCascadeState(),
+    cascadeContent: @Composable CascadeColumnScope.() -> Unit,
+    tabsCount: Int
 ) {
+    var isMenuVisible by retain { mutableStateOf(false) }
     barModeTransition.AnimatedVisibility(
         visible = { it != BarMode.SEARCHING }) {
         IconButton(
@@ -653,10 +757,16 @@ fun RowScope.BottomBarContent(
                 )
             }
             IconButton(
-                onClick = { }) {
-                Icon(
-                    imageVector = Icons.Filled.MoreVert, contentDescription = null
-                )
+                onClick = { isMenuVisible = true }
+            ) {
+                CascadeDropdownMenu(
+                    expanded = isMenuVisible,
+                    state = cascadeState,
+                    onDismissRequest = { isMenuVisible = false },
+                ) {
+                    cascadeContent()
+                }
+                Icon(Icons.Rounded.MoreVert, contentDescription = "More options")
             }
         }
     }

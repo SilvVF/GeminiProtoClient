@@ -47,8 +47,6 @@ class Settings(
         Theme.entries.getOrNull(it) ?: Theme.System
     }
     val incognito by preferenceStateFlow(Keys.incognito, true)
-    val recentlyViewed by preferenceStateFlow(Keys.recentlyViewed, emptySet())
-    val bookmarked by preferenceStateFlow(Keys.bookmarked, emptySet())
 
 
     companion object {
@@ -56,8 +54,6 @@ class Settings(
             val appTheme = intPreferencesKey("app_theme_pref")
             val darkMode = intPreferencesKey("dark_mode_pref")
             val incognito = booleanPreferencesKey("incognito")
-            val recentlyViewed = stringSetPreferencesKey("recently_viewed_links")
-            val bookmarked = stringSetPreferencesKey("bookmarked_links")
         }
     }
 }

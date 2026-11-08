@@ -83,6 +83,18 @@ public fun <T : R, R> Flow<T>.collectAsRetainedState(
 public fun <T> produceRetainedState(
     initialValue: T,
     key1: Any?,
+    producer: suspend ProduceStateScope<T>.() -> Unit,
+): State<T> {
+    val result = retain { mutableStateOf(initialValue) }
+    LaunchedEffect(key1) { ProduceRetainedStateScopeImpl(result, coroutineContext).producer() }
+    return result
+}
+
+
+@Composable
+public fun <T> produceRetainedState(
+    initialValue: T,
+    key1: Any?,
     key2: Any?,
     producer: suspend ProduceStateScope<T>.() -> Unit,
 ): State<T> {
